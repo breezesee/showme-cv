@@ -1,0 +1,20 @@
+schema: spec-driven
+
+# Project context (optional)
+context: |
+  ShowMe（仓库 jianli）：Android 求职简历 App。技术栈：Kotlin + Jetpack Compose + Material3（iOS 风定制）、
+  kotlinx-serialization（filesDir/resume.json 单文件持久化）、NanoHTTPD（局域网电脑接力服务）、
+  ZXing（二维码生成）、WebView（HTML 模板渲染与系统打印导出 PDF）。
+  架构约定：com.showme.app.data.Resume 为唯一数据源；assets/templates/*.html 通过
+  window.__showme_render(data) 契约渲染，App 预览、PC 接力 H5（assets/web/index.html）与 PDF 导出共用；
+  接力 HTTP 契约：GET /、GET /templates/{id}、GET /api/resume、POST /api/resume?token=。
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours

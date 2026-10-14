@@ -1,0 +1,129 @@
+/* ShowMe 网页版 · 全局样式（Apple 官网风设计令牌） */
+:root {
+  --bg: #f5f5f7;
+  --card: #ffffff;
+  --ink: #1d1d1f;
+  --muted: #6e6e73;
+  --line: rgba(0, 0, 0, 0.08);
+  --fill: rgba(120, 120, 128, 0.1);
+  --fill-strong: rgba(120, 120, 128, 0.16);
+  --accent: #0071e3;
+  --accent-press: #0060c9;
+  --danger: #ff3b30;
+  --success: #34c759;
+  --radius: 18px;
+  --radius-sm: 12px;
+  /* 多层柔和阴影：卡片 → 浮层 → 大面板 */
+  --shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.03), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.05), 0 12px 32px rgba(0, 0, 0, 0.09);
+  --shadow-lg: 0 8px 20px rgba(0, 0, 0, 0.1), 0 24px 60px rgba(0, 0, 0, 0.13);
+  /* 键盘焦点环与统一缓动 */
+  --ring: 0 0 0 3.5px rgba(0, 113, 227, 0.28);
+  --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --toolbar-h: 60px;
+  --tabbar-h: 56px;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body { overflow-x: hidden; }
+
+button, input, textarea, select { font: inherit; color: inherit; }
+
+/* 键盘可达性：焦点环只跟键盘（:focus-visible），鼠标点击不出现 */
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+/* 毛玻璃顶栏 / 底栏 */
+.glass {
+  background: rgba(245, 245, 247, 0.78);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  backdrop-filter: saturate(180%) blur(24px);
+}
+
+/* 按钮：胶囊形，hover 有呼吸感（主按钮上浮带光晕，普通按钮背景加深） */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--fill);
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s var(--ease), box-shadow 0.2s var(--ease), transform 0.12s var(--ease), opacity 0.15s;
+}
+.btn:hover { background: var(--fill-strong); }
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.35; cursor: default; transform: none; }
+.btn svg { width: 18px; height: 18px; flex: none; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent); box-shadow: 0 6px 16px rgba(0, 113, 227, 0.32); }
+.btn-primary:active { background: var(--accent-press); box-shadow: none; }
+.btn-plain { background: transparent; }
+.btn-plain:hover { background: var(--fill); }
+.btn-danger { color: var(--danger); }
+.btn-block { width: 100%; min-height: 48px; border-radius: 14px; font-size: 16px; }
+
+/* 白色分组卡片 */
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* 手机上所有可点击元素的触控区域不小于 44×44 */
+@media (max-width: 899.98px) {
+  .btn { min-height: 44px; padding: 0 16px; }
+}
+
+/* 尊重系统的减弱动态效果设置 */
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}

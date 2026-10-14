@@ -1,0 +1,22 @@
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# 日志与临时
+*.log
+.DS_Store
+
+# 本地临时目录（不入库）
+/_local/
+
+# 依赖与构建产物
+node_modules/
+
+# 网页版
+web/node_modules/
+web/dist/
+web/dev-dist/
+web/.netlify/

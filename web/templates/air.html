@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="format-detection" content="telephone=no">
+<title>清朗 · ShowMe</title>
+<!--showme:runtime-->
+<style>
+  :root { --accent:#0A84FF; --ink:#1c1c1e; --muted:#8e8e93; --line:#ececf0; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; }
+  body { background:#f5f5f7; font-family:-apple-system,"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif; color:var(--ink); -webkit-font-smoothing:antialiased; }
+  .sheet { padding:17mm 15mm; }
+  .r-head { margin-bottom:10px; padding:var(--head-pad,0); background:var(--head-bg,transparent); border-radius:12px; }
+  .r-head h1 { font-size:34px; font-weight:600; margin:0 0 8px; letter-spacing:1px; overflow-wrap:anywhere; }
+  .r-title { color:var(--accent); font-size:15px; margin-bottom:10px; }
+  .r-contact { color:var(--muted); font-size:12.5px; letter-spacing:.5px; }
+  .dot { margin:0 10px; color:#d4d4da; }
+  section { margin-top:26px; border-top:1px solid var(--line); padding-top:16px; }
+  section[data-cont] { border-top:0; padding-top:0; }
+  h2 { font-size:12px; margin:0 0 14px; letter-spacing:5px; color:var(--muted); font-weight:600; }
+  h2::before { content:''; display:inline-block; width:18px; height:2px; background:var(--accent); margin-right:8px; vertical-align:3px; }
+  .entry + .entry { margin-top:18px; }
+  .entry-head { display:flex; justify-content:space-between; align-items:baseline; gap:12px; }
+  .strong { font-weight:600; font-size:14.5px; }
+  .sub { color:var(--accent); font-size:13px; margin-top:2px; }
+  .entry-date { color:var(--muted); font-size:12px; white-space:nowrap; }
+  .entry > .rt { margin-top:6px; }
+  .rt { font-size:13.5px; line-height:1.85; color:#3a3a40; }
+  .rt.muted { color:var(--muted); font-size:13px; line-height:1.7; margin-top:4px; }
+  .rt-ul li { font-size:13px; line-height:1.8; }
+  .rt-ul li::marker { color:var(--accent); }
+  .bullets { margin-top:8px; padding-left:16px; font-size:13px; line-height:1.8; color:#3a3a40; }
+  .skill-row { display:flex; font-size:13px; line-height:2; }
+  .skill-cat { color:var(--muted); width:96px; flex:none; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* 渲染契约：window.__showme_render(data)，由运行时 SM.mount 定义；分页标记说明见 runtime.js */
+SM.mount(function (d) {
+  var esc = SM.esc, has = SM.has, lines = SM.lines, period = SM.period;
+  var b = d.basics || {};
+
+  function section(title, body) {
+    if (!String(body || '').trim()) return '';
+    return '<section><h2 data-u data-keep>' + title + '</h2>' + body + '</section>';
+  }
+  /* 条目：抬头在有正文时与正文同页；较短的整条不拆 */
+  function entry(name, date, sub, body) {
+    var head = '<div class="entry-head"><span class="strong">' + name + '</span>' +
+      '<span class="entry-date">' + esc(date) + '</span></div>';
+    if (sub) head += '<div class="sub">' + sub + '</div>';
+    return '<div class="entry" data-avoid><div data-u' + (body ? ' data-keep' : '') + '>' + head + '</div>' + body + '</div>';
+  }
+
+  var html = '';
+  var head = '';
+  if (has(b.name)) head += '<h1>' + esc(b.name) + '</h1>';
+  if (has(b.title)) head += '<div class="r-title">' + esc(b.title) + '</div>';
+  var contacts = [b.city, b.phone, b.email].filter(has).map(esc).join('<span class="dot">/</span>');
+  if (contacts) head += '<div class="r-contact">' + contacts + '</div>';
+  if (head) html += '<header class="r-head" data-u>' + head + '</header>';
+
+  if (has(b.summary)) html += section('自我评价', SM.rich(b.summary));
+
+  html += section('教育经历', (d.education || []).map(function (e) {
+    var sub = [e.major, e.degree].filter(has).map(esc).join(' · ');
+    return entry(esc(e.school || ''), period(e.start, e.end), sub, SM.rich(e.notes, 'muted'));
+  }).join(''));
+
+  html += section('工作经历', (d.work || []).map(function (w) {
+    var body = SM.rich(w.description) + SM.list(w.highlights, 'bullets');
+    return entry(esc(w.company || ''), period(w.start, w.end), has(w.position) ? esc(w.position) : '', body);
+  }).join(''));
+
+  html += section('项目经历', (d.projects || []).map(function (p) {
+    return entry(esc(p.name || ''), period(p.start, p.end), has(p.role) ? esc(p.role) : '', SM.rich(p.description));
+  }).join(''));
+
+  html += section('技能', (d.skills || []).map(function (g) {
+    var items = lines(g.items).map(esc).join('、');
+    if (!has(g.category) && !items) return '';
+    return '<div class="skill-row" data-u><span class="skill-cat">' + esc(g.category || '') + '</span><span>' + items + '</span></div>';
+  }).join(''));
+
+  return {
+    sheet: function () { return '<div class="sheet"><div data-flow="main"></div></div>'; },
+    flows: { main: html }
+  };
+});
+</script>
+</body>
+</html>

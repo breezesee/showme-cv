@@ -1,0 +1,9 @@
+# Netlify 部署配置（npm run deploy）。
+# 静态站点构建到 dist/；短码中转接口由 netlify/functions/relay.mts 提供，
+# 存储用 Netlify Blobs（store 名 relay），接口路由在函数内用 config.path 声明。
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[functions]
+  directory = "netlify/functions"

@@ -1,0 +1,35 @@
+{
+  "name": "showme-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "ShowMe 简历 · 响应式网页版（手机 / PC 自适应，PWA）",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "icons": "node scripts/gen-icons.mjs",
+    "deploy": "npm run build && npx --yes netlify-cli@latest deploy --prod"
+  },
+  "dependencies": {
+    "lz-string": "^1.5.0",
+    "qrcode": "^1.5.4",
+    "vue": "^3.5.43"
+  },
+  "devDependencies": {
+    "@netlify/blobs": "^11.1.4",
+    "@netlify/functions": "^6.0.2",
+    "@types/node": "^22.10.0",
+    "@types/qrcode": "^1.5.6",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.7",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^3.2.7",
+    "vue-tsc": "^3.3.13",
+    "workbox-build": "^7.4.1",
+    "workbox-window": "^7.4.1"
+  }
+}

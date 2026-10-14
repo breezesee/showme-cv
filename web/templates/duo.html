@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="format-detection" content="telephone=no">
+<title>双栏 · ShowMe</title>
+<!--showme:runtime-->
+<style>
+  :root { --side:#1f2a44; --side-ink:#f4f6fb; --side-muted:#9fb0d0; --accent:#4da3ff; --ink:#222226; --muted:#77777d; --line:#e6e6ea; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; }
+  body { background:#ececf1; font-family:-apple-system,"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif; color:var(--ink); -webkit-font-smoothing:antialiased; }
+  .sheet { flex-direction:row; }
+  .side, .main { display:flex; flex-direction:column; min-width:0; }
+  .side { flex:none; width:32%; background:var(--side); color:var(--side-ink); padding:11mm 6.5mm; }
+  .main { flex:1; padding:11mm 8.5mm; }
+  .side h1 { font-size:24px; margin:0 0 6px; letter-spacing:2px; overflow-wrap:anywhere; }
+  .r-title { color:var(--side-accent,#4da3ff); font-size:13.5px; }
+  .side-sec { margin-top:20px; }
+  .side-sec h2 { font-size:11.5px; letter-spacing:4px; color:var(--side-muted); margin:0 0 8px; font-weight:600; }
+  .side-item + .side-item { margin-top:10px; }
+  .side-item { font-size:12.5px; line-height:1.7; }
+  .side-item .t { font-weight:600; overflow-wrap:anywhere; }
+  .side-item .d { color:var(--side-muted); font-size:11.5px; }
+  .side-item .rt { color:#c8d3e8; font-size:12px; line-height:1.7; }
+  .side-skill { font-size:12.5px; line-height:1.7; overflow-wrap:anywhere; }
+  .side-skill + .side-skill { margin-top:8px; }
+  .side-skill .c { color:var(--side-muted); font-size:11.5px; display:block; }
+  .side-contact { font-size:12.5px; line-height:1.9; color:#dfe6f3; overflow-wrap:anywhere; }
+  .main h2 { font-size:14px; letter-spacing:3px; margin:0 0 12px; color:var(--side); border-bottom:2px solid var(--side); padding-bottom:6px; }
+  .main section + section { margin-top:22px; }
+  .entry + .entry { margin-top:14px; }
+  .entry-head { display:flex; justify-content:space-between; align-items:baseline; gap:12px; }
+  .strong { font-weight:600; font-size:14px; }
+  .entry-date { color:var(--muted); font-size:12px; white-space:nowrap; }
+  .muted { color:var(--muted); font-size:12.5px; margin-top:2px; }
+  .entry > .rt { margin-top:4px; }
+  .rt { font-size:13px; line-height:1.8; color:#3a3a40; }
+  .rt-ul li { font-size:12.5px; line-height:1.75; }
+  .main .rt-ul li::marker { color:var(--accent); }
+  .bullets { margin-top:6px; padding-left:17px; font-size:12.5px; line-height:1.75; color:#3a3a40; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* 渲染契约：window.__showme_render(data)，由运行时 SM.mount 定义；分页标记说明见 runtime.js。
+   双栏版式：侧栏 = 联系方式 / 技能 / 教育经历；主栏 = 自我评价 / 工作经历 / 项目经历；每页都绘制侧栏底色 */
+SM.mount(function (d) {
+  var esc = SM.esc, has = SM.has, lines = SM.lines, period = SM.period;
+  var b = d.basics || {};
+
+  function sideSection(title, body) {
+    if (!String(body || '').trim()) return '';
+    return '<div class="side-sec"><h2 data-u data-keep>' + title + '</h2>' + body + '</div>';
+  }
+  function mainSection(title, body) {
+    if (!String(body || '').trim()) return '';
+    return '<section><h2 data-u data-keep>' + title + '</h2>' + body + '</section>';
+  }
+  /* 条目：抬头在有正文时与正文同页；较短的整条不拆 */
+  function entry(head, date, sub, body) {
+    var h = '<div class="entry-head"><span class="strong">' + head + '</span>' +
+      '<span class="entry-date">' + esc(date) + '</span></div>';
+    if (sub) h += '<div class="muted">' + sub + '</div>';
+    return '<div class="entry" data-avoid><div data-u' + (body ? ' data-keep' : '') + '>' + h + '</div>' + body + '</div>';
+  }
+
+  /* 侧栏 */
+  var side = '<div data-u><h1>' + esc(b.name || '') + '</h1>' +
+    (has(b.title) ? '<div class="r-title">' + esc(b.title) + '</div>' : '') + '</div>';
+
+  side += sideSection('联系方式', [b.city, b.phone, b.email].filter(has).map(function (x) {
+    return '<div class="side-contact" data-u>' + esc(x) + '</div>';
+  }).join(''));
+
+  side += sideSection('技能', (d.skills || []).map(function (g) {
+    var items = lines(g.items).map(esc).join('、');
+    if (!has(g.category) && !items) return '';
+    return '<div class="side-skill" data-u>' +
+      (has(g.category) ? '<span class="c">' + esc(g.category) + '</span>' : '') + items + '</div>';
+  }).join(''));
+
+  side += sideSection('教育经历', (d.education || []).map(function (e) {
+    var h = '<div class="t">' + esc(e.school || '') + '</div>';
+    var sub = [e.major, e.degree].filter(has).map(esc).join(' · ');
+    if (sub) h += '<div class="d">' + sub + '</div>';
+    if (has(e.start) || has(e.end)) h += '<div class="d">' + esc(period(e.start, e.end)) + '</div>';
+    var notes = SM.rich(e.notes);
+    return '<div class="side-item" data-avoid><div data-u' + (notes ? ' data-keep' : '') + '>' + h + '</div>' + notes + '</div>';
+  }).join(''));
+
+  /* 主栏 */
+  var main = '';
+  if (has(b.summary)) main += mainSection('自我评价', SM.rich(b.summary));
+
+  main += mainSection('工作经历', (d.work || []).map(function (w) {
+    var body = SM.rich(w.description) + SM.list(w.highlights, 'bullets');
+    return entry(esc(w.company || ''), period(w.start, w.end), has(w.position) ? esc(w.position) : '', body);
+  }).join(''));
+
+  main += mainSection('项目经历', (d.projects || []).map(function (p) {
+    var h = esc(p.name || '');
+    if (has(p.role)) h += ' · ' + esc(p.role);
+    return entry(h, period(p.start, p.end), '', SM.rich(p.description));
+  }).join(''));
+
+  return {
+    sheet: function () {
+      return '<div class="sheet"><aside class="side"><div data-flow="side"></div></aside>' +
+        '<main class="main"><div data-flow="main"></div></main></div>';
+    },
+    flows: { side: side, main: main }
+  };
+});
+</script>
+</body>
+</html>

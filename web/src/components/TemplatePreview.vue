@@ -1,0 +1,153 @@
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { Resume } from '../model/resume'
+import type { TemplateId } from '../templates/catalog'
+import { fetchTemplate, injectData, renderPayload, type ShowmeWindow } from '../templates/loader'
+import type { ThemeId } from '../templates/themes'
+
+/**
+ * 实时预览：模板以 srcdoc 载入同源 iframe，数据变化时直接调用 __showme_render 重绘（不重载文档）。
+ * 模板运行时把内容分到多张 A4 纸（.sheet），预览显示的就是打印出来的分页；
+ * iframe 固定按 A4 宽度排版，再整体等比缩放到容器宽度。
+ */
+const props = defineProps<{ resume: Resume; templateId: TemplateId; themeId: ThemeId }>()
+
+const PAGE_W = 794
+const PAGE_H = 1123
+const RENDER_DELAY = 120
+// 去掉模板自带的灰底与外边距，纸张间隔透出外层背景；阴影会被 iframe 边界裁掉，改用内描边；禁止 iframe 内滚动
+const PREVIEW_STYLE =
+  '<style>html,body{background:transparent!important;overflow:hidden!important}#app{padding:0!important}' +
+  '.sheet{box-shadow:none!important;outline:1px solid rgba(0,0,0,.08);outline-offset:-1px}</style>'
+
+const host = ref<HTMLElement>()
+const frame = ref<HTMLIFrameElement>()
+const srcdoc = ref('')
+const failed = ref(false)
+const hostWidth = ref(PAGE_W)
+const contentHeight = ref(PAGE_H)
+const pageCount = ref(1)
+
+const scale = computed(() => Math.min(1, hostWidth.value / PAGE_W))
+
+let loadSeq = 0
+async function loadTemplate(id: TemplateId): Promise<void> {
+  const seq = ++loadSeq
+  failed.value = false
+  try {
+    const tpl = await fetchTemplate(id)
+    if (seq === loadSeq) srcdoc.value = injectData(tpl, renderPayload(props.resume, props.themeId), PREVIEW_STYLE)
+  } catch {
+    if (seq === loadSeq) failed.value = true
+  }
+}
+
+function render(): void {
+  const win = frame.value?.contentWindow as ShowmeWindow | null | undefined
+  win?.__showme_render?.(renderPayload(props.resume, props.themeId))
+  measure()
+}
+
+function measure(): void {
+  const doc = frame.value?.contentDocument
+  if (!doc) return
+  contentHeight.value = Math.max(PAGE_H, Math.ceil(doc.documentElement.getBoundingClientRect().height))
+  pageCount.value = Math.max(1, doc.querySelectorAll('.sheet').length)
+}
+
+let innerObserver: ResizeObserver | undefined
+function onFrameLoad(): void {
+  const win = frame.value?.contentWindow as (Window & typeof globalThis) | null | undefined
+  const doc = frame.value?.contentDocument
+  if (!win || !doc) return
+  // srcdoc 生成后到载入完成之间数据可能又变了，载入后按最新数据重绘一次
+  render()
+  innerObserver?.disconnect()
+  innerObserver = new win.ResizeObserver(measure)
+  innerObserver.observe(doc.documentElement)
+  measure()
+}
+
+watch(() => props.templateId, loadTemplate, { immediate: true })
+
+let timer: ReturnType<typeof setTimeout> | undefined
+// 内容或主题变化都只需重绘（主题是换 CSS 变量，无须重载模板文档）
+watch(
+  () => [props.resume, props.themeId],
+  () => {
+    if (timer !== undefined) clearTimeout(timer)
+    timer = setTimeout(render, RENDER_DELAY)
+  },
+  { deep: true },
+)
+
+let hostObserver: ResizeObserver | undefined
+onMounted(() => {
+  // 不可见时模板无法测量分页，重新可见后重绘一次
+  let hidden = false
+  hostObserver = new ResizeObserver(([entry]) => {
+    const w = entry.contentRect.width
+    if (w <= 0) {
+      hidden = true
+      return
+    }
+    hostWidth.value = w
+    if (hidden) {
+      hidden = false
+      render()
+    }
+  })
+  hostObserver.observe(host.value!)
+})
+
+onBeforeUnmount(() => {
+  if (timer !== undefined) clearTimeout(timer)
+  hostObserver?.disconnect()
+  innerObserver?.disconnect()
+})
+</script>
+
+<template>
+  <div ref="host" class="preview">
+    <div v-if="failed" class="preview-error card">
+      <p>模板加载失败，请检查网络后重试。</p>
+      <button class="btn" type="button" @click="loadTemplate(templateId)">重试</button>
+    </div>
+    <div v-else class="paper" :style="{ width: `${PAGE_W * scale}px`, height: `${contentHeight * scale}px` }">
+      <iframe
+        ref="frame"
+        class="paper-frame"
+        title="简历预览"
+        :srcdoc="srcdoc"
+        :style="{ width: `${PAGE_W}px`, height: `${contentHeight}px`, transform: `scale(${scale})` }"
+        @load="onFrameLoad"
+      />
+    </div>
+    <p v-if="!failed" class="pages hint">A4 · 共 {{ pageCount }} 页</p>
+  </div>
+</template>
+
+<style scoped>
+.preview { width: 100%; min-width: 0; }
+.paper {
+  margin: 0 auto;
+  overflow: hidden;
+}
+.pages { margin: 8px 0 0; text-align: center; }
+.paper-frame {
+  display: block;
+  border: none;
+  transform-origin: 0 0;
+  pointer-events: none; /* 只读预览，滚动交给外层页面 */
+}
+.preview-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 16px;
+  color: var(--muted);
+  text-align: center;
+}
+.preview-error p { margin: 0; }
+</style>

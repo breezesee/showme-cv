@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="format-detection" content="telephone=no">
+<title>简雅 · ShowMe</title>
+<!--showme:runtime-->
+<style>
+  :root { --accent:#0A84FF; --ink:#222226; --muted:#77777d; --line:#e6e6ea; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; }
+  body { background:#ececf1; font-family:-apple-system,"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif; color:var(--ink); -webkit-font-smoothing:antialiased; }
+  .sheet { padding:14mm 16mm; }
+  .r-head { text-align:center; padding:var(--head-pad,0) 0 18px; background:var(--head-bg,transparent); border-bottom:2px solid var(--ink); }
+  .r-head h1 { font-size:30px; margin:0 0 6px; letter-spacing:2px; overflow-wrap:anywhere; }
+  .r-title { color:var(--accent); font-size:15px; letter-spacing:1px; margin-bottom:8px; }
+  .r-contact { color:var(--muted); font-size:12.5px; }
+  .dot { margin:0 8px; color:#c9c9cf; }
+  section { margin-top:22px; }
+  h2 { font-size:15px; margin:0 0 12px; letter-spacing:3px; border-bottom:1px solid var(--line); padding-bottom:6px; }
+  .entry + .entry { margin-top:14px; }
+  .entry-head { display:flex; justify-content:space-between; align-items:baseline; gap:12px; }
+  .strong { font-weight:600; font-size:14.5px; }
+  .entry-date { color:var(--muted); font-size:12.5px; white-space:nowrap; }
+  .entry > .rt { margin-top:4px; }
+  .rt { font-size:13.5px; line-height:1.8; color:#3a3a40; }
+  .rt.muted { color:var(--muted); font-size:13px; line-height:1.7; margin-top:2px; }
+  .rt-ul li { font-size:13px; line-height:1.75; }
+  .bullets { margin-top:6px; padding-left:18px; font-size:13px; line-height:1.75; color:#3a3a40; }
+  .skill-row { display:flex; font-size:13px; line-height:1.9; }
+  .skill-cat { color:var(--muted); width:96px; flex:none; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* 渲染契约：window.__showme_render(data)，由运行时 SM.mount 定义；分页标记说明见 runtime.js */
+SM.mount(function (d) {
+  var esc = SM.esc, has = SM.has, lines = SM.lines, period = SM.period;
+  var b = d.basics || {};
+
+  function section(title, body) {
+    if (!String(body || '').trim()) return '';
+    return '<section><h2 data-u data-keep>' + title + '</h2>' + body + '</section>';
+  }
+  /* 条目：抬头在有正文时与正文同页；较短的整条不拆 */
+  function entry(head, date, body) {
+    return '<div class="entry" data-avoid><div class="entry-head" data-u' + (body ? ' data-keep' : '') + '>' +
+      '<span class="strong">' + head + '</span><span class="entry-date">' + esc(date) + '</span></div>' + body + '</div>';
+  }
+
+  var html = '';
+  var head = '';
+  if (has(b.name)) head += '<h1>' + esc(b.name) + '</h1>';
+  if (has(b.title)) head += '<div class="r-title">' + esc(b.title) + '</div>';
+  var contacts = [b.city, b.phone, b.email].filter(has).map(esc).join('<span class="dot">·</span>');
+  if (contacts) head += '<div class="r-contact">' + contacts + '</div>';
+  if (head) html += '<header class="r-head" data-u>' + head + '</header>';
+
+  if (has(b.summary)) html += section('自我评价', SM.rich(b.summary));
+
+  html += section('教育经历', (d.education || []).map(function (e) {
+    var h = esc(e.school || '');
+    if (has(e.major)) h += ' · ' + esc(e.major);
+    if (has(e.degree)) h += '（' + esc(e.degree) + '）';
+    return entry(h, period(e.start, e.end), SM.rich(e.notes, 'muted'));
+  }).join(''));
+
+  html += section('工作经历', (d.work || []).map(function (w) {
+    var h = esc(w.company || '');
+    if (has(w.position)) h += ' · ' + esc(w.position);
+    return entry(h, period(w.start, w.end), SM.rich(w.description) + SM.list(w.highlights, 'bullets'));
+  }).join(''));
+
+  html += section('项目经历', (d.projects || []).map(function (p) {
+    var h = esc(p.name || '');
+    if (has(p.role)) h += ' · ' + esc(p.role);
+    return entry(h, period(p.start, p.end), SM.rich(p.description));
+  }).join(''));
+
+  html += section('技能', (d.skills || []).map(function (g) {
+    var items = lines(g.items).map(esc).join('、');
+    if (!has(g.category) && !items) return '';
+    return '<div class="skill-row" data-u><span class="skill-cat">' + esc(g.category || '') + '</span><span>' + items + '</span></div>';
+  }).join(''));
+
+  return {
+    sheet: function () { return '<div class="sheet"><div data-flow="main"></div></div>'; },
+    flows: { main: html }
+  };
+});
+</script>
+</body>
+</html>

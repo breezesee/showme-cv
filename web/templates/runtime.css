@@ -1,0 +1,91 @@
+/* ShowMe 模板运行时样式：与 runtime.js 一同内联。纸张为 A4，打印时一页纸对应一张 .sheet */
+#app { display:flex; flex-direction:column; align-items:center; gap:16px; padding:16px 0; }
+.sheet {
+  box-sizing:border-box; flex:none; position:relative;
+  width:210mm; height:297mm; overflow:hidden;
+  display:flex; flex-direction:column;
+  background:var(--paper,#fff); box-shadow:0 2px 16px rgba(0,0,0,.08);
+  -webkit-print-color-adjust:exact; print-color-adjust:exact;
+}
+[data-flow] { flex:1 1 0; min-height:0; overflow:hidden; }
+[data-flow] > :first-child, [data-cont] > :first-child { margin-top:0 !important; }
+.rt-p { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
+.rt-ul { margin:0; padding-left:1.2em; }
+.rt-ul li { overflow-wrap:anywhere; }
+.rt-gap { margin-top:.6em; }
+/* 纸面顶部装饰条：主题未设置时高度为 0，不显示 */
+.sheet::after {
+  content:''; position:absolute; top:0; left:0; right:0;
+  height:var(--band-h,0); background:var(--band,none);
+}
+/*
+ * 主题：排版无关的设计组合。每个主题给出完整的视觉语言：
+ *   --paper 纸面背景（径向光晕 + 线性渐变多层叠加，营造氛围）
+ *   --head-bg / --head-pad 简历头部底色块（模板自建 padding，未设置时不变样）
+ *   --accent / --ink / --muted / --line 强调色与文字、分隔系统
+ *   --band / --band-h 纸顶装饰条   --side 三件套 双栏模板的侧栏（含高光）
+ * html[data-theme=…] 优先级高于模板内的 :root 默认值，与出现顺序无关；
+ * 未覆盖的变量沿用模板默认。全部浅色，保证打印 / 存 PDF 可读。
+ */
+html[data-theme='graphite'] {
+  --accent:#2b2b30; --line:#e9e9ee;
+  --band:#2b2b30; --band-h:6px;
+  --head-bg:linear-gradient(135deg,#f4f4f6,#fbfbfd); --head-pad:14px 18px;
+  --side:radial-gradient(130% 90% at 85% 0%, rgba(255,255,255,.16), transparent 55%), linear-gradient(180deg,#34343c,#1d1d23);
+  --side-ink:#f4f4f6; --side-muted:#a9a9b2; --side-accent:#d6d6de;
+}
+html[data-theme='warm'] {
+  --accent:#c46a2b; --ink:#33302b; --muted:#8d8578; --line:#efe6d6;
+  --paper:radial-gradient(120% 45% at 50% 0%, rgba(224,145,61,.12), transparent 70%), linear-gradient(180deg,#fdfaf3,#f8f0e0);
+  --band:linear-gradient(90deg,#e0913d,#f0c285); --band-h:6px;
+  --head-bg:linear-gradient(135deg,rgba(224,145,61,.16),rgba(224,145,61,.05)); --head-pad:14px 18px;
+  --side:radial-gradient(130% 90% at 85% 0%, rgba(255,255,255,.15), transparent 55%), linear-gradient(180deg,#4a3a2a,#2d2115);
+  --side-ink:#f7f1e6; --side-muted:#cbb693; --side-accent:#f2b177;
+}
+html[data-theme='mint'] {
+  --accent:#0fa88f; --line:#e0efe9;
+  --paper:radial-gradient(120% 45% at 50% 0%, rgba(15,168,143,.10), transparent 70%), linear-gradient(180deg,#fbfefd,#f0f9f5);
+  --band:linear-gradient(90deg,#0fa88f,#83d9c6); --band-h:6px;
+  --head-bg:linear-gradient(135deg,rgba(15,168,143,.14),rgba(15,168,143,.04)); --head-pad:14px 18px;
+  --side:radial-gradient(130% 90% at 85% 0%, rgba(255,255,255,.15), transparent 55%), linear-gradient(180deg,#1d4f45,#112e28);
+  --side-ink:#eef8f4; --side-muted:#9cc8ba; --side-accent:#6fdcc2;
+}
+html[data-theme='dusk'] {
+  --accent:#2f5da8; --line:#dbe5f2;
+  --paper:radial-gradient(120% 45% at 50% 0%, rgba(47,93,168,.10), transparent 70%), linear-gradient(180deg,#f7fafe,#ecf2fa);
+  --band:#2f5da8; --band-h:6px;
+  --head-bg:linear-gradient(135deg,#e6eef9,#f4f8fd); --head-pad:14px 18px;
+  --side:radial-gradient(130% 90% at 85% 0%, rgba(255,255,255,.16), transparent 55%), linear-gradient(180deg,#2c4d80,#1b3156);
+  --side-ink:#f0f4fb; --side-muted:#a6b9dc; --side-accent:#8fb7ee;
+}
+html[data-theme='violet'] {
+  --accent:#7a5af5; --line:#ebe6fb;
+  --paper:radial-gradient(120% 45% at 50% 0%, rgba(122,90,245,.10), transparent 70%), linear-gradient(180deg,#fcfbff,#f4f1fd);
+  --band:linear-gradient(90deg,#7a5af5,#b3a2fa); --band-h:6px;
+  --head-bg:linear-gradient(135deg,rgba(122,90,245,.14),rgba(122,90,245,.04)); --head-pad:14px 18px;
+  --side:radial-gradient(130% 90% at 85% 0%, rgba(255,255,255,.16), transparent 55%), linear-gradient(180deg,#3d3070,#251d46);
+  --side-ink:#f2effd; --side-muted:#b1a4e2; --side-accent:#b7a4fb;
+}
+html[data-theme='rose'] {
+  --accent:#d24f78; --line:#f6e3ea;
+  --paper:radial-gradient(120% 45% at 50% 0%, rgba(210,79,120,.10), transparent 70%), linear-gradient(180deg,#fefbfc,#faf0f4);
+  --band:linear-gradient(90deg,#d24f78,#efa9c1); --band-h:6px;
+  --head-bg:linear-gradient(135deg,rgba(210,79,120,.13),rgba(210,79,120,.04)); --head-pad:14px 18px;
+  --side:radial-gradient(130% 90% at 85% 0%, rgba(255,255,255,.15), transparent 55%), linear-gradient(180deg,#573345,#37202c);
+  --side-ink:#fbf0f4; --side-muted:#d5abc0; --side-accent:#f4a8c3;
+}
+html[data-theme='forest'] {
+  --accent:#2e7d5f; --line:#dfece5;
+  --paper:radial-gradient(120% 45% at 50% 0%, rgba(46,125,95,.10), transparent 70%), linear-gradient(180deg,#fafcfb,#edf5f0);
+  --band:#2e7d5f; --band-h:6px;
+  --head-bg:linear-gradient(135deg,rgba(46,125,95,.13),rgba(46,125,95,.04)); --head-pad:14px 18px;
+  --side:radial-gradient(130% 90% at 85% 0%, rgba(255,255,255,.15), transparent 55%), linear-gradient(180deg,#2b5040,#193227);
+  --side-ink:#eef6f1; --side-muted:#a2c3b3; --side-accent:#7cc9a6;
+}
+@page { size:A4; margin:0; }
+@media print {
+  html, body { background:#fff !important; }
+  #app { display:block; padding:0; }
+  .sheet { box-shadow:none; break-after:page; page-break-after:always; }
+  .sheet:last-child { break-after:auto; page-break-after:auto; }
+}
