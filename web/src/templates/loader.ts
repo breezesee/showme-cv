@@ -10,24 +10,21 @@ export interface RenderData extends Resume {
   showmeTheme?: string
 }
 
-const cache = new Map<TemplateId, Promise<string>>()
+/**
+ * 模板取自构建期打包的虚拟模块（见 vite.config.ts 的 templateModule）：与页面 JS 同哈希、
+ * 被 Service Worker 原子预缓存。不要改回运行时 fetch /templates/*.html——那会让未刷新的
+ * 旧页面搭上新模板，导出末字折行叠印（混合版本事故，2026-10）。
+ */
+type TemplateMap = Record<TemplateId, string>
+let allTemplates: Promise<TemplateMap> | null = null
 
-export function templateUrl(id: TemplateId): string {
-  return `${import.meta.env.BASE_URL}templates/${id}.html`
-}
-
-/** 拉取模板 HTML（成功结果缓存；失败不缓存，下次可重试） */
+/** 取模板 HTML（按需异步加载并缓存；加载失败不缓存，下次可重试） */
 export function fetchTemplate(id: TemplateId): Promise<string> {
-  let p = cache.get(id)
-  if (!p) {
-    p = fetch(templateUrl(id)).then((res) => {
-      if (!res.ok) throw new Error(`模板 ${id} 加载失败：HTTP ${res.status}`)
-      return res.text()
-    })
-    p.catch(() => cache.delete(id))
-    cache.set(id, p)
-  }
-  return p
+  allTemplates ??= import('virtual:showme-templates').then((m) => m.TEMPLATES as TemplateMap)
+  allTemplates.catch(() => {
+    allTemplates = null
+  })
+  return allTemplates.then((all) => all[id])
 }
 
 /**

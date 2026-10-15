@@ -62,6 +62,13 @@ export async function checkUpdate(baseUrl = import.meta.env.BASE_URL): Promise<U
   return judgeUpdate(await fetchRemoteBuildInfo(baseUrl), currentBuild())
 }
 
+/** 导出/打印前的版本守卫：本地程序落后于线上部署时中止并引导刷新，防止旧代码产出坏文档（unknown/latest 放行） */
+export async function assertUpToDate(): Promise<void> {
+  if ((await checkUpdate()) === 'outdated') {
+    throw new Error('检测到新版本，请先点页脚「清除缓存并刷新」，再重新导出/打印')
+  }
+}
+
 /** 清除全部 Cache Storage、注销全部 Service Worker，然后整页刷新（无论清理是否报错） */
 export async function clearCachesAndReload(): Promise<void> {
   try {

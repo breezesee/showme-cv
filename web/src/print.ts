@@ -1,5 +1,6 @@
 import { loadPrintPayload } from './print/payload'
 import { fetchTemplate, injectData, renderPayload, type ShowmeWindow } from './templates/loader'
+import { assertUpToDate } from './version'
 
 /**
  * 打印页：把模板渲染为顶层文档后唤起浏览器打印。
@@ -67,9 +68,15 @@ async function main(): Promise<void> {
   }
   let template: string
   try {
+    await assertUpToDate() // 过期页面禁止打印（与导出同一混合版本防护）
+  } catch {
+    showMessage('检测到新版本，请回到 ShowMe 点页脚「清除缓存并刷新」后重新打印。')
+    return
+  }
+  try {
     template = await fetchTemplate(payload.templateId)
   } catch {
-    showMessage('模板加载失败，请检查网络后重试。')
+    showMessage('模板加载失败，请刷新页面后重试。')
     return
   }
   // 文档标题即浏览器"另存为 PDF"时的默认文件名

@@ -43,7 +43,8 @@ function readTemplate(id: string): string {
   return html.replace(RUNTIME_MARK, () => runtime)
 }
 
-/** 开发时把 /templates/<id>.html 映射到模板目录（内联运行时）；构建时输出到 dist/templates/ */
+/** 开发时把 /templates/<id>.html 映射到模板目录（内联运行时）；构建时输出到 dist/templates/。
+ * 应用运行时已不再拉取该端点（模板改走下方虚拟模块），保留它便于浏览器直接打开模板调试 */
 function sharedTemplates(): Plugin {
   return {
     name: 'showme-templates',
@@ -64,6 +65,27 @@ function sharedTemplates(): Plugin {
       for (const id of TEMPLATE_IDS) {
         this.emitFile({ type: 'asset', fileName: `templates/${id}.html`, source: readTemplate(id) })
       }
+    },
+  }
+}
+
+/**
+ * 虚拟模块 virtual:showme-templates：把内联运行时后的三套模板以字符串打进一个异步 chunk。
+ * 导出/打印/预览改从该模块取模板——模板与页面 JS 同哈希、被 SW 原子预缓存，
+ * 从结构上杜绝「未刷新的旧页面 JS + 新模板」的混合状态（曾致旧窗口导出 PDF 末字折行叠印复发）。
+ */
+function templateModule(): Plugin {
+  const ID = 'virtual:showme-templates'
+  const RESOLVED = '\0' + ID
+  return {
+    name: 'showme-template-module',
+    resolveId(id) {
+      if (id === ID) return RESOLVED
+    },
+    load(id) {
+      if (id !== RESOLVED) return
+      const entries = TEMPLATE_IDS.map((tid) => `  ${JSON.stringify(tid)}: ${JSON.stringify(readTemplate(tid))}`)
+      return `export const TEMPLATES = {\n${entries.join(',\n')}\n}`
     },
   }
 }
@@ -113,6 +135,7 @@ export default defineConfig({
   plugins: [
     vue(),
     sharedTemplates(),
+    templateModule(),
     relayDev(),
     versionManifest(),
     VitePWA({
@@ -137,8 +160,10 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // manifest.webmanifest 由插件自动加入，这里不再匹配
+        // manifest.webmanifest 由插件自动加入，这里不再匹配；
+        // templates/*.html 已打包进 JS（虚拟模块），用 globIgnores 排除出预缓存以免无人引用的冗余副本
         globPatterns: ['**/*.{js,css,html,svg,png}'],
+        globIgnores: ['templates/*.html'],
         navigateFallback: 'index.html',
         // 中转接口不能被 Service Worker 拦成首页
         navigateFallbackDenylist: [/^\/api\//],

@@ -1,5 +1,5 @@
 /*
- * ShowMe 模板运行时：构建时内联进每个模板（替换 <!--showme:runtime--> 标记）。
+ * ShowMe 模板运行时：构建时内联进每个模板（替换 showme:runtime 占位标记）。
  * - 文本工具：esc / has / lines / period / rich / list
  * - A4 分页：模板声明纸张骨架与内容流，运行时按槽位高度把内容逐页排开
  * - 渲染契约：SM.mount(build) 定义 window.__showme_render(data)

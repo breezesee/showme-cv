@@ -1,13 +1,14 @@
 /**
  * PDF 导出：图片式直出——离屏 iframe 用真实模板渲染整份简历，逐页（.sheet）截图后打包进 PDF。
  * 与预览完全一致（模板、主题、分页都由模板运行时完成），无需用户操作打印对话框。
- * 三个重依赖（jspdf / modern-screenshot / 模板）全部动态加载，不进主包。
+ * jspdf / modern-screenshot 动态加载；模板经虚拟模块随构建打包为异步 chunk，与页面代码原子更新。
  */
 import type { Resume } from '../model/resume'
 import { downloadBlob, exportFileName } from './download'
 import { fetchTemplate, injectData, renderPayload } from '../templates/loader'
 import type { TemplateId } from '../templates/catalog'
 import type { ThemeId } from '../templates/themes'
+import { assertUpToDate } from '../version'
 
 /** A4 纸宽（CSS px），与打印页一致的测量宽度 */
 const PAPER_W = 794
@@ -76,6 +77,8 @@ async function waitSettled(iframe: HTMLIFrameElement): Promise<void> {
 }
 
 export async function renderResumePdf(resume: Resume, templateId: TemplateId, themeId: ThemeId): Promise<Blob> {
+  // 版本守卫：过期页面禁止导出（无法拿到与自身代码同代的模板/修复），引导用户刷新；unknown/latest 放行
+  await assertUpToDate()
   const [{ jsPDF }, { domToPng }, template] = await Promise.all([
     import('jspdf'),
     import('modern-screenshot'),

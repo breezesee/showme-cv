@@ -4,6 +4,7 @@ import {
   judgeUpdate,
   fetchRemoteBuildInfo,
   checkUpdate,
+  assertUpToDate,
   clearCachesAndReload,
   type BuildInfo,
 } from './version'
@@ -87,6 +88,27 @@ describe('checkUpdate', () => {
   it('远端不可用 → unknown', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('x', { status: 500 })))
     await expect(checkUpdate()).resolves.toBe('unknown')
+  })
+})
+
+describe('assertUpToDate', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('本地落后（outdated）→ 抛错并引导清除缓存刷新', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      new Response(JSON.stringify({ version: '9.9.9', buildTime: local(2026, 10, 16, 0, 0) }), { status: 200 }),
+    ))
+    await expect(assertUpToDate()).rejects.toThrow('清除缓存并刷新')
+  })
+
+  it('latest 与 unknown（远端不可用）→ 放行', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('x', { status: 500 })))
+    await expect(assertUpToDate()).resolves.toBeUndefined()
+
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      new Response(JSON.stringify({ version: '0.1.0', buildTime: 1 }), { status: 200 }),
+    ))
+    await expect(assertUpToDate()).resolves.toBeUndefined()
   })
 })
 
