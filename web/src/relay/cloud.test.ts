@@ -32,13 +32,16 @@ async function errorOf(p: Promise<unknown>): Promise<CloudRelayError> {
 }
 
 describe('短码中转：加解密', () => {
-  it('往返一致', async () => {
+  it('往返一致，外观随简历一起传输', async () => {
     const r = sampleResume()
     r.basics.name = '张三 <b>&</b> 🚀'
-    const { payload, key } = await sealResume(r)
+    const { payload, key } = await sealResume(r, { templateId: 'air', themeId: 'dusk' })
     expect(key).toMatch(/^[A-Za-z0-9_-]{22}$/)
     expect(payload).toMatch(/^[A-Za-z0-9_-]+$/)
-    expect(await openResume(payload, key)).toEqual(r)
+    expect(await openResume(payload, key)).toEqual({ resume: r, look: { templateId: 'air', themeId: 'dusk' } })
+    // 不带外观时解出纯简历
+    const plain = await sealResume(r)
+    expect(await openResume(plain.payload, plain.key)).toEqual({ resume: r })
   })
 
   it('密钥错误或密文被篡改判为损坏', async () => {
@@ -57,14 +60,15 @@ describe('短码中转：加解密', () => {
 })
 
 describe('短码中转：端到端', () => {
-  it('生成短链接 → 另一端取回，内容一致，服务器只有密文', async () => {
+  it('生成短链接 → 另一端取回，内容与外观一致，服务器只有密文', async () => {
     const server = fakeServer()
     const r = sampleResume()
-    const link = await createShortLink(r, PAGE + '#old', server.fetchImpl)
+    const look = { templateId: 'duo', themeId: 'rose' } as const
+    const link = await createShortLink(r, PAGE + '#old', look, server.fetchImpl)
     expect(link.url.length).toBeLessThan(120)
     const parsed = parseRelayHash(new URL(link.url).hash)
     if (parsed.kind !== 'cloud') throw new Error(parsed.kind)
-    expect(await fetchShortLink(parsed.id, parsed.key, link.url, server.fetchImpl, noWait)).toEqual(r)
+    expect(await fetchShortLink(parsed.id, parsed.key, link.url, server.fetchImpl, noWait)).toEqual({ resume: r, look })
 
     expect(server.stored).toHaveLength(1)
     expect(server.stored[0]).not.toContain(parsed.key)
@@ -84,7 +88,7 @@ describe('短码中转：端到端', () => {
   it('7 天后过期', async () => {
     let now = 1_000_000
     const server = fakeServer(() => now)
-    const link = await createShortLink(sampleResume(), PAGE, server.fetchImpl)
+    const link = await createShortLink(sampleResume(), PAGE, undefined, server.fetchImpl)
     const parsed = parseRelayHash(new URL(link.url).hash)
     if (parsed.kind !== 'cloud') throw new Error(parsed.kind)
     now += RELAY_TTL_SECONDS * 1000 - 1
@@ -97,12 +101,12 @@ describe('短码中转：端到端', () => {
     const offline = (async () => {
       throw new TypeError('Failed to fetch')
     }) as typeof fetch
-    expect((await errorOf(createShortLink(sampleResume(), PAGE, offline))).kind).toBe('network')
+    expect((await errorOf(createShortLink(sampleResume(), PAGE, undefined, offline))).kind).toBe('network')
     expect((await errorOf(fetchShortLink('a1B2c3D4e5', 'k'.repeat(22), PAGE, offline, noWait))).kind).toBe('network')
 
     // 未部署中转时，静态托管通常返回首页 HTML
     const html = (async () => new Response('<!doctype html>', { status: 200 })) as typeof fetch
-    expect((await errorOf(createShortLink(sampleResume(), PAGE, html))).kind).toBe('server')
+    expect((await errorOf(createShortLink(sampleResume(), PAGE, undefined, html))).kind).toBe('server')
   })
 })
 

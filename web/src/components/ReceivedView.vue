@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { sameResume } from '../model/normalize'
-import type { Resume } from '../model/resume'
+import type { RelayPayload } from '../relay/link'
 import { useResume } from '../store/useResume'
+import type { TemplateId } from '../templates/catalog'
+import type { ThemeId } from '../templates/themes'
 import { confirmOverwrite, printResume } from '../ui/actions'
 import { showToast } from '../ui/toast'
 import Icon from './Icon.vue'
@@ -11,19 +13,25 @@ import TemplatePreview from './TemplatePreview.vue'
 import ThemePicker from './ThemePicker.vue'
 
 /** 「收到的简历」：只读预览接力链接带来的简历，由用户决定导入或仅查看 */
-const props = defineProps<{ incoming: Resume }>()
+const props = defineProps<{ incoming: RelayPayload }>()
 const emit = defineEmits<{ close: [] }>()
 
 const { resume, templateId, themeId, replaceResume } = useResume()
 const viewOnly = ref(false)
-const name = computed(() => props.incoming.basics.name.trim() || '未命名')
+const name = computed(() => props.incoming.resume.basics.name.trim() || '未命名')
 
-function importIncoming(): void {
-  if (sameResume(props.incoming, resume.value)) {
+/** 外观用本地状态：发送方在链接里带来就用他的，否则用本机偏好；只有导入才写回本机偏好 */
+const localTemplateId = ref<TemplateId>(props.incoming.look?.templateId ?? templateId.value)
+const localThemeId = ref<ThemeId>(props.incoming.look?.themeId ?? themeId.value)
+
+async function importIncoming(): Promise<void> {
+  if (sameResume(props.incoming.resume, resume.value)) {
     showToast('与本机简历相同，无需导入')
   } else {
-    if (!confirmOverwrite(props.incoming)) return
-    replaceResume(props.incoming)
+    if (!(await confirmOverwrite(props.incoming.resume))) return
+    replaceResume(props.incoming.resume)
+    templateId.value = localTemplateId.value
+    themeId.value = localThemeId.value
     showToast('已导入为我的简历', 'success')
   }
   emit('close')
@@ -38,7 +46,9 @@ function importIncoming(): void {
         <strong>收到的简历</strong>
         <span>{{ name }}</span>
       </div>
-      <button class="btn btn-plain" type="button" @click="printResume(incoming, templateId, themeId)"><Icon name="print" />打印</button>
+      <button class="btn btn-plain" type="button" @click="printResume(incoming.resume, localTemplateId, localThemeId)">
+        <Icon name="print" />打印
+      </button>
     </header>
 
     <main class="rv-body">
@@ -53,10 +63,20 @@ function importIncoming(): void {
       </div>
 
       <div class="rv-pickers">
-        <TemplatePicker v-model="templateId" />
-        <ThemePicker v-model="themeId" />
+        <div class="look-group">
+          <span class="look-label">模板</span>
+          <TemplatePicker v-model="localTemplateId" />
+        </div>
+        <div class="look-group">
+          <span class="look-label">主题</span>
+          <ThemePicker v-model="localThemeId" />
+        </div>
       </div>
-      <TemplatePreview :resume="incoming" :template-id="templateId" :theme-id="themeId" />
+      <TemplatePreview
+        :resume="incoming.resume"
+        :template-id="localTemplateId"
+        :theme-id="localThemeId"
+      />
     </main>
   </div>
 </template>
@@ -101,5 +121,5 @@ function importIncoming(): void {
 .rv-prompt { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
 .rv-prompt p { margin: 0 0 6px; line-height: 1.6; }
 .rv-inline { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.rv-pickers { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.rv-pickers { display: flex; flex-direction: column; gap: 10px; }
 </style>

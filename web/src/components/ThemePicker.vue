@@ -1,12 +1,24 @@
 <script setup lang="ts">
+import { nextTick, ref } from 'vue'
 import { THEMES, type ThemeId } from '../templates/themes'
 
-/** 主题选择器：迷你简历缩微卡（A4 比例），纸面 / 色带 / 标题线按主题着色，所见即所得 */
+/** 主题选择器：迷你简历缩微卡（A4 比例），纸面 / 色带 / 标题线按主题着色，所见即所得；方向键切换 */
 const model = defineModel<ThemeId>({ required: true })
+const groupEl = ref<HTMLElement>()
+
+function onKeydown(e: KeyboardEvent): void {
+  const dir = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0
+  if (!dir) return
+  e.preventDefault()
+  const i = THEMES.findIndex((t) => t.id === model.value)
+  const next = (i + dir + THEMES.length) % THEMES.length
+  model.value = THEMES[next].id
+  void nextTick(() => (groupEl.value?.children[next] as HTMLElement | undefined)?.focus())
+}
 </script>
 
 <template>
-  <div class="themes" role="radiogroup" aria-label="简历主题">
+  <div ref="groupEl" class="themes" role="radiogroup" aria-label="简历主题" @keydown="onKeydown">
     <button
       v-for="t in THEMES"
       :key="t.id"
@@ -15,6 +27,7 @@ const model = defineModel<ThemeId>({ required: true })
       type="button"
       role="radio"
       :aria-checked="model === t.id"
+      :tabindex="model === t.id ? 0 : -1"
       :aria-label="t.name"
       :title="t.name"
       :style="{ '--a': t.accent }"
@@ -113,16 +126,16 @@ const model = defineModel<ThemeId>({ required: true })
   transform: scale(1);
 }
 .name {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
   color: var(--muted);
   transition: color 0.15s;
 }
 .mini.active .name {
-  color: var(--a);
+  color: var(--ink);
   font-weight: 600;
 }
-@media (max-width: 899.98px) {
+@media (max-width: 1099.98px) {
   .themes { gap: 2px 8px; }
   .mini { padding: 4px 6px; }
 }

@@ -1,12 +1,11 @@
 import { compressToUint8Array, decompressFromUint8Array } from 'lz-string'
-import { normalizeResume } from '../model/normalize'
 import type { Resume } from '../model/resume'
-import { buildShortUrl, dropEmpty } from './link'
+import { buildShortUrl, decodeRelayData, encodeRelayData, type RelayLook, type RelayPayload } from './link'
 
 /**
  * 短码分享（二维码主路径）：浏览器端加密 → 上传密文换短码 → 链接只含短码与密钥。
  * 链接格式 #s=1.<短码>.<密钥>（见 ./link.ts），密钥只在 hash 中，从不发给服务器；服务端只存密文，7 天过期。
- * 密文 = base64url( IV(12 字节) || AES-GCM-128( lz-string 压缩的简历 JSON ) )
+ * 密文 = base64url( IV(12 字节) || AES-GCM-128( lz-string 压缩的接力数据 JSON，含简历与外观 ) )
  */
 const SHORT_ID_PATTERN = /^[0-9A-Za-z]{10}$/
 const IV_BYTES = 12
@@ -40,12 +39,12 @@ export function fromBase64Url(text: string): Uint8Array<ArrayBuffer> {
   return out
 }
 
-/** 加密简历，返回上传用的密文与放进链接的密钥 */
-export async function sealResume(resume: Resume): Promise<{ payload: string; key: string }> {
+/** 加密简历（含外观选择），返回上传用的密文与放进链接的密钥 */
+export async function sealResume(resume: Resume, look?: RelayLook): Promise<{ payload: string; key: string }> {
   const cryptoKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 128 }, true, ['encrypt'])
   const raw = new Uint8Array(await crypto.subtle.exportKey('raw', cryptoKey))
   const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES))
-  const plain = new Uint8Array(compressToUint8Array(JSON.stringify(resume, dropEmpty)))
+  const plain = new Uint8Array(compressToUint8Array(encodeRelayData(resume, look)))
   const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, cryptoKey, plain))
   const packed = new Uint8Array(IV_BYTES + sealed.length)
   packed.set(iv)
@@ -54,7 +53,7 @@ export async function sealResume(resume: Resume): Promise<{ payload: string; key
 }
 
 /** 解密并校验；密钥不对、数据被篡改或不是简历结构时抛 broken */
-export async function openResume(payload: string, key: string): Promise<Resume> {
+export async function openResume(payload: string, key: string): Promise<RelayPayload> {
   try {
     const packed = fromBase64Url(payload.trim())
     const cryptoKey = await crypto.subtle.importKey('raw', fromBase64Url(key), { name: 'AES-GCM' }, false, ['decrypt'])
@@ -65,7 +64,7 @@ export async function openResume(payload: string, key: string): Promise<Resume> 
     )
     const json = decompressFromUint8Array(new Uint8Array(plain))
     if (!json) throw new Error('empty')
-    return normalizeResume(JSON.parse(json))
+    return decodeRelayData(JSON.parse(json))
   } catch {
     throw new CloudRelayError('broken', '链接已损坏')
   }
@@ -85,10 +84,11 @@ export interface ShortLink {
 export async function createShortLink(
   resume: Resume,
   pageUrl: string,
+  look?: RelayLook,
   fetchImpl: typeof fetch = fetch,
 ): Promise<ShortLink> {
   if (!cloudSupported()) throw new CloudRelayError('unsupported', '当前环境不支持加密（需 https 访问）')
-  const { payload, key } = await sealResume(resume)
+  const { payload, key } = await sealResume(resume, look)
   let res: Response
   try {
     res = await fetchImpl(apiUrl(pageUrl), {
@@ -116,7 +116,7 @@ export async function fetchShortLink(
   pageUrl: string,
   fetchImpl: typeof fetch = fetch,
   wait: (ms: number) => Promise<void> = sleep,
-): Promise<Resume> {
+): Promise<RelayPayload> {
   if (!cloudSupported()) throw new CloudRelayError('unsupported', '当前环境不支持解密（需 https 访问）')
   for (let attempt = 0; ; attempt++) {
     let res: Response

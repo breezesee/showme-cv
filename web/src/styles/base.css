@@ -11,6 +11,9 @@
   --accent-press: #0060c9;
   --danger: #ff3b30;
   --success: #34c759;
+  --warning: #a05a00;
+  --warning-bg: rgba(255, 149, 0, 0.12);
+  --disabled: #c7c7cc;
   --radius: 18px;
   --radius-sm: 12px;
   /* 多层柔和阴影：卡片 → 浮层 → 大面板 */
@@ -109,6 +112,19 @@ a:focus-visible {
   line-height: 1.6;
 }
 
+/* 外观类控件的「标签 + 选择器」组合（模板 / 主题） */
+.look-group { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.look-label { flex: none; color: var(--muted); font-size: 12px; }
+
+.notice {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -118,8 +134,8 @@ a:focus-visible {
   white-space: nowrap;
 }
 
-/* 手机上所有可点击元素的触控区域不小于 44×44 */
-@media (max-width: 899.98px) {
+/* 单列布局（窄屏与平板）下所有可点击元素的触控区域不小于 44×44 */
+@media (max-width: 1099.98px) {
   .btn { min-height: 44px; padding: 0 16px; }
 }
 

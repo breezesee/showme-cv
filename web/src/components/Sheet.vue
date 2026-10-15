@@ -1,34 +1,67 @@
 <script setup lang="ts">
-import { onBeforeUnmount, watch } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import Icon from './Icon.vue'
 
-/** 宽屏弹层：点遮罩或按 Esc 关闭 */
+/** 宽屏弹层：点遮罩或按 Esc 关闭；打开时聚焦、Tab 在弹层内循环、关闭后焦点还给触发元素 */
 defineProps<{ title: string }>()
 const open = defineModel<boolean>('open', { required: true })
 
-function onKey(e: KeyboardEvent): void {
-  if (e.key === 'Escape') open.value = false
+const sheetEl = ref<HTMLElement>()
+const closeBtn = ref<HTMLButtonElement>()
+let lastFocus: HTMLElement | null = null
+
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+function focusables(): HTMLElement[] {
+  if (!sheetEl.value) return []
+  return [...sheetEl.value.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.offsetParent !== null)
 }
 
-watch(
-  open,
-  (v) => {
-    if (v) window.addEventListener('keydown', onKey)
-    else window.removeEventListener('keydown', onKey)
-  },
-  { immediate: true },
-)
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+watch(open, async (v) => {
+  if (v) {
+    lastFocus = document.activeElement as HTMLElement | null
+    await nextTick()
+    closeBtn.value?.focus()
+  } else if (lastFocus) {
+    lastFocus.focus()
+    lastFocus = null
+  }
+})
+
+function onKey(e: KeyboardEvent): void {
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    open.value = false
+    return
+  }
+  if (e.key !== 'Tab') return
+  const list = focusables()
+  if (!list.length) {
+    e.preventDefault()
+    return
+  }
+  const i = list.indexOf(document.activeElement as HTMLElement)
+  const next = list[(i + (e.shiftKey ? -1 : 1) + list.length * 2) % list.length]
+  if (i < 0 || !next) e.preventDefault()
+  next?.focus()
+}
 </script>
 
 <template>
   <Teleport to="body">
     <Transition name="sheet">
       <div v-if="open" class="sheet-backdrop" @click.self="open = false">
-        <div class="sheet" role="dialog" aria-modal="true" :aria-label="title">
+        <div
+          ref="sheetEl"
+          class="sheet"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="title"
+          @keydown="onKey"
+        >
           <header class="sheet-head">
             <h2>{{ title }}</h2>
-            <button class="sheet-close" type="button" aria-label="关闭" @click="open = false"><Icon name="close" /></button>
+            <button ref="closeBtn" class="sheet-close" type="button" aria-label="关闭" @click="open = false"><Icon name="close" /></button>
           </header>
           <div class="sheet-body">
             <slot />

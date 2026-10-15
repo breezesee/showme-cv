@@ -12,8 +12,8 @@ const open = defineModel<boolean>('open', { default: false })
       <span v-if="meta" class="section-meta">{{ meta }}</span>
       <Icon name="chevron" class="section-chevron" :class="{ open }" />
     </button>
-    <!-- grid-rows 0fr→1fr 实现高度自适应的平滑展开 -->
-    <div class="section-wrap" :class="{ open }">
+    <!-- grid-rows 0fr→1fr 实现高度自适应的平滑展开；收起时 inert 让内容退出交互与读屏 -->
+    <div class="section-wrap" :class="{ open }" :inert="!open || undefined">
       <div class="section-body">
         <slot />
       </div>
@@ -54,7 +54,7 @@ const open = defineModel<boolean>('open', { default: false })
   flex: none;
   width: 18px;
   height: 18px;
-  color: #c4c4c7;
+  color: var(--disabled);
   transition: transform 0.3s var(--ease);
 }
 .section-meta + .section-chevron { margin-left: 4px; }

@@ -1,4 +1,5 @@
 <script setup lang="ts" generic="T">
+import { showToast } from '../ui/toast'
 import Icon from './Icon.vue'
 
 /** 通用条目列表：增删、上移下移；条目字段由默认插槽渲染 */
@@ -16,10 +17,15 @@ function move(i: number, delta: number) {
   props.items.splice(j, 0, it)
 }
 
+/** 删除不打断操作：直接删掉，给 5 秒撤销 */
 function remove(i: number) {
-  const s = props.summary(props.items[i]).trim()
-  if (!window.confirm(`删除这条${props.noun}${s ? `「${s}」` : ''}？`)) return
+  const removed = props.items[i]
+  const label = props.summary(removed).trim()
   props.items.splice(i, 1)
+  showToast(`已删除${label ? `「${label}」` : `这条${props.noun}`}`, 'info', 5000, {
+    label: '撤销',
+    run: () => props.items.splice(Math.min(i, props.items.length), 0, removed),
+  })
 }
 
 function add() {
@@ -83,7 +89,7 @@ function add() {
 }
 .icon-btn svg { width: 20px; height: 20px; }
 .icon-btn:active:not(:disabled) { background: var(--fill); }
-.icon-btn:disabled { color: #c7c7cc; cursor: default; }
+.icon-btn:disabled { color: var(--disabled); cursor: default; }
 .icon-btn.danger { color: var(--danger); }
 .entry-fields { display: flex; flex-direction: column; gap: 12px; }
 .add-btn { align-self: flex-start; min-height: 44px; }

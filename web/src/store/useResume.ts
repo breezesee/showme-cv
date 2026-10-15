@@ -15,6 +15,10 @@ const resume = ref<Resume>(initial.resume)
 const templateId = ref<TemplateId>(loadTemplatePref())
 const themeId = ref<ThemeId>(loadThemePref())
 
+/** 保存状态：供界面显示「保存中… / 已保存 HH:mm」 */
+const saving = ref(false)
+const savedAt = ref<number | null>(null)
+
 let timer: ReturnType<typeof setTimeout> | undefined
 let dirty = false
 
@@ -23,13 +27,15 @@ function flush(): void {
   timer = undefined
   if (!dirty) return
   dirty = false
-  store.save(resume.value)
+  saving.value = false
+  if (store.save(resume.value)) savedAt.value = Date.now()
 }
 
 watch(
   resume,
   () => {
     dirty = true
+    saving.value = true
     if (timer !== undefined) clearTimeout(timer)
     timer = setTimeout(flush, AUTOSAVE_DELAY)
   },
@@ -50,11 +56,14 @@ export function useResume() {
     resume,
     templateId,
     themeId,
+    saving,
+    savedAt,
     initialStatus: initial.status as LoadStatus,
     /** 整体替换当前简历（导入 JSON / 导入接力简历），并立即保存 */
     replaceResume(next: Resume) {
       resume.value = next
       dirty = true
+      saving.value = true
       flush()
     },
   }

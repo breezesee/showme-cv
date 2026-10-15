@@ -14,7 +14,10 @@
     "deploy": "npm run build && npx --yes netlify-cli@latest deploy --prod"
   },
   "dependencies": {
+    "docx": "^9.11.0",
+    "jspdf": "^4.2.1",
     "lz-string": "^1.5.0",
+    "modern-screenshot": "^4.7.0",
     "qrcode": "^1.5.4",
     "vue": "^3.5.43"
   },
@@ -24,6 +27,7 @@
     "@types/node": "^22.10.0",
     "@types/qrcode": "^1.5.6",
     "@vitejs/plugin-vue": "^6.0.10",
+    "jszip": "^3.10.2",
     "typescript": "~5.9.3",
     "vite": "^7.3.7",
     "vite-plugin-pwa": "^2.0.0",

@@ -70,6 +70,16 @@ export const emptyResume = (): Resume => ({
   skills: [],
 })
 
+/** 整份简历没有任何内容（预览显示空态引导用） */
+export function isResumeEmpty(r: Resume): boolean {
+  const has = (s: string) => s.trim() !== ''
+  const { basics } = r
+  return (
+    !has(basics.name) && !has(basics.title) && !has(basics.phone) && !has(basics.email) && !has(basics.city) && !has(basics.summary)
+    && r.education.length === 0 && r.work.length === 0 && r.projects.length === 0 && r.skills.length === 0
+  )
+}
+
 /** 首次使用预填的中文示例简历 */
 export function sampleResume(): Resume {
   return {

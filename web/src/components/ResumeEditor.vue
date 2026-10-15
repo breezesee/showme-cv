@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { computed, reactive } from 'vue'
 import { emptyEducation, emptyProject, emptySkillGroup, emptyWork } from '../model/resume'
 import { useResume } from '../store/useResume'
 import EntryList from './EntryList.vue'
@@ -7,13 +7,20 @@ import LinesField from './LinesField.vue'
 import SectionCard from './SectionCard.vue'
 import TextField from './TextField.vue'
 
-const { resume } = useResume()
+const { resume, saving, savedAt } = useResume()
 
 const open = reactive({ basics: true, education: false, work: false, projects: false, skills: false, summary: false })
 
 const count = (n: number) => (n ? `${n} 条` : '')
 /** 长文本字段的格式说明（与模板运行时 SM.rich 的规则一致） */
 const RICH_HINT = '回车换行，空行分段，以「-」开头的行显示为圆点'
+
+const pad = (n: number) => String(n).padStart(2, '0')
+const saveText = computed(() => {
+  if (saving.value) return '保存中…'
+  const t = savedAt.value
+  return t ? `已自动保存 ${pad(new Date(t).getHours())}:${pad(new Date(t).getMinutes())}` : '修改会自动保存在此浏览器'
+})
 </script>
 
 <template>
@@ -98,7 +105,7 @@ const RICH_HINT = '回车换行，空行分段，以「-」开头的行显示为
       <TextField v-model="resume.basics.summary" label="介绍自己" multiline :rows="5" :hint="RICH_HINT" />
     </SectionCard>
 
-    <p class="hint autosave">所有修改自动保存在本设备浏览器中</p>
+    <p class="hint autosave" aria-live="polite">{{ saveText }}</p>
   </div>
 </template>
 

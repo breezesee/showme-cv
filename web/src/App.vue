@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
+import ConfirmHost from './components/ConfirmHost.vue'
 import ReceivedView from './components/ReceivedView.vue'
 import ResumeEditor from './components/ResumeEditor.vue'
 import SharePanel from './components/SharePanel.vue'
@@ -9,16 +10,15 @@ import TemplatePreview from './components/TemplatePreview.vue'
 import ThemePicker from './components/ThemePicker.vue'
 import ToastHost from './components/ToastHost.vue'
 import Icon, { type IconName } from './components/Icon.vue'
-import type { Resume } from './model/resume'
 import { CloudRelayError, fetchShortLink } from './relay/cloud'
-import { parseRelayHash } from './relay/link'
+import { parseRelayHash, type RelayPayload } from './relay/link'
 import { useResume } from './store/useResume'
-import { exportCurrent, importFromFile, printResume } from './ui/actions'
+import { exportCurrent, exportPdf, importFromFile } from './ui/actions'
 import { showToast } from './ui/toast'
 import { useMediaQuery } from './ui/useMediaQuery'
 
 const { resume, templateId, themeId, initialStatus } = useResume()
-const isWide = useMediaQuery('(min-width: 900px)')
+const isWide = useMediaQuery('(min-width: 1100px)')
 const logo = `${import.meta.env.BASE_URL}icons/icon.svg`
 
 type Tab = 'edit' | 'preview' | 'share'
@@ -31,8 +31,8 @@ const tab = ref<Tab>('edit')
 const tabTitle = computed(() => TABS.find((t) => t.id === tab.value)!.title)
 const shareOpen = ref(false)
 
-/** 通过接力链接收到、尚未处理的简历 */
-const incoming = shallowRef<Resume | null>(null)
+/** 通过接力链接收到、尚未处理的简历（含发送方选择的外观） */
+const incoming = shallowRef<RelayPayload | null>(null)
 
 /** 处理地址中的接力数据；返回是否存在接力链接 */
 function consumeRelayHash(): boolean {
@@ -41,7 +41,7 @@ function consumeRelayHash(): boolean {
   // 先清掉地址中的数据：刷新不会重复弹出，数据和密钥也不会留在浏览历史里
   history.replaceState(history.state, '', location.pathname + location.search)
   if (result.kind === 'broken') showToast('链接已损坏，未导入任何内容', 'error', 4000)
-  else if (result.kind === 'ok') incoming.value = result.resume
+  else if (result.kind === 'ok') incoming.value = { resume: result.resume, look: result.look }
   else void receiveShortLink(result.id, result.key)
   return true
 }
@@ -72,6 +72,20 @@ function selectTab(next: Tab): void {
   window.scrollTo(0, 0)
 }
 
+/** 直出 PDF（与预览一致）；打印版入口保留在分享页的导出区 */
+const exportingPdf = ref(false)
+async function runExportPdf(): Promise<void> {
+  if (exportingPdf.value) return
+  exportingPdf.value = true
+  try {
+    await exportPdf(resume.value, templateId.value, themeId.value)
+  } catch (e) {
+    showToast(`导出 PDF 失败：${e instanceof Error ? e.message : '未知错误'}`, 'error', 5000)
+  } finally {
+    exportingPdf.value = false
+  }
+}
+
 onMounted(() => {
   const relayed = consumeRelayHash()
   window.addEventListener('hashchange', onHashChange)
@@ -89,19 +103,27 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
   <div v-else-if="isWide" class="wide">
     <header class="toolbar glass">
       <div class="brand"><img :src="logo" alt="" width="28" height="28" />ShowMe</div>
-      <TemplatePicker v-model="templateId" />
       <div class="tools">
-        <button class="btn btn-plain" type="button" @click="importFromFile"><Icon name="upload" />导入</button>
-        <button class="btn btn-plain" type="button" @click="exportCurrent"><Icon name="download" />导出</button>
+        <button class="btn btn-plain" type="button" @click="importFromFile"><Icon name="upload" />导入备份</button>
+        <button class="btn btn-plain" type="button" @click="exportCurrent"><Icon name="download" />导出备份</button>
         <button class="btn" type="button" @click="shareOpen = true"><Icon name="share" />分享</button>
-        <button class="btn btn-primary" type="button" @click="printResume(resume, templateId, themeId)"><Icon name="print" />打印 / 导出 PDF</button>
+        <button class="btn btn-primary" type="button" :disabled="exportingPdf" @click="runExportPdf"><Icon name="download" />{{ exportingPdf ? '导出中…' : '导出 PDF' }}</button>
       </div>
     </header>
     <main class="columns">
       <div class="col-edit"><ResumeEditor /></div>
       <div class="col-preview">
-        <ThemePicker v-model="themeId" class="col-themes" />
-        <TemplatePreview :resume="resume" :template-id="templateId" :theme-id="themeId" />
+        <div class="look-bar">
+          <div class="look-group">
+            <span class="look-label">模板</span>
+            <TemplatePicker v-model="templateId" />
+          </div>
+          <div class="look-group">
+            <span class="look-label">主题</span>
+            <ThemePicker v-model="themeId" />
+          </div>
+        </div>
+        <TemplatePreview :resume="resume" :template-id="templateId" :theme-id="themeId" bounded />
       </div>
     </main>
     <Sheet v-model:open="shareOpen" title="分享与备份"><SharePanel /></Sheet>
@@ -115,11 +137,17 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
     <main class="narrow-body">
       <ResumeEditor v-show="tab === 'edit'" class="pane" />
       <div v-show="tab === 'preview'" class="preview-page">
-        <TemplatePicker v-model="templateId" />
-        <ThemePicker v-model="themeId" />
+        <div class="look-group">
+          <span class="look-label">模板</span>
+          <TemplatePicker v-model="templateId" />
+        </div>
+        <div class="look-group">
+          <span class="look-label">主题</span>
+          <ThemePicker v-model="themeId" />
+        </div>
         <TemplatePreview :resume="resume" :template-id="templateId" :theme-id="themeId" />
-        <button class="btn btn-primary btn-block" type="button" @click="printResume(resume, templateId, themeId)">
-          <Icon name="print" />打印 / 导出 PDF
+        <button class="btn btn-primary btn-block" type="button" :disabled="exportingPdf" @click="runExportPdf">
+          <Icon name="download" />{{ exportingPdf ? '导出中…' : '导出 PDF' }}
         </button>
       </div>
       <SharePanel v-if="tab === 'share'" class="pane" />
@@ -140,6 +168,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
     </nav>
   </div>
 
+  <ConfirmHost />
   <ToastHost />
 </template>
 
@@ -161,21 +190,29 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
 .tools { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .columns {
   display: grid;
-  grid-template-columns: minmax(380px, 460px) minmax(0, 1fr);
+  grid-template-columns: minmax(340px, 420px) minmax(0, 1fr);
   gap: 28px;
   max-width: 1440px;
   margin: 0 auto;
   padding: 24px;
   align-items: start;
 }
+/* 预览栏高度固定为视口内可用高度：内部的「整页」缩放与滚动都在这一栏里完成 */
 .col-preview {
   position: sticky;
   top: calc(var(--toolbar-h) + 24px);
-  max-height: calc(100vh - var(--toolbar-h) - 48px);
-  padding: 4px 8px 16px; /* 给纸张阴影留出空间 */
-  overflow-y: auto;
-  scrollbar-gutter: stable; /* 滚动条出现与否不改变宽度，避免缩放来回跳动 */
-  scrollbar-width: thin;
+  height: calc(100dvh - var(--toolbar-h) - 48px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 8px;
+}
+.look-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 20px;
+  padding: 0 4px;
 }
 
 /* ---------- 窄屏 ---------- */
@@ -188,9 +225,8 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
   padding: 12px calc(16px + var(--safe-right)) calc(var(--tabbar-h) + var(--safe-bottom) + 24px) calc(16px + var(--safe-left));
 }
 .preview-page { display: flex; flex-direction: column; gap: 16px; }
-.col-themes { margin: 0 0 14px; }
-/* 平板竖屏（600–900px）：编辑 / 分享表单限宽居中，预览保持满宽 */
-@media (min-width: 600px) and (max-width: 899.98px) {
+/* 单列布局（窄屏与平板）：编辑 / 分享表单限宽居中，预览保持满宽 */
+@media (min-width: 600px) {
   .pane { max-width: 640px; margin-inline: auto; }
 }
 .tabbar {

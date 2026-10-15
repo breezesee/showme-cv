@@ -3,7 +3,8 @@ import { compressToEncodedURIComponent } from 'lz-string'
 import { emptyResume, emptyWork, sampleResume, type Resume } from '../model/resume'
 import { buildRelayUrl, buildShortUrl, encodeRelayHash, parseRelayHash } from './link'
 
-const encodeRelayHashFull = (r: Resume) => '#r=1.' + compressToEncodedURIComponent(JSON.stringify(r))
+/** 不做 dropEmpty 的同版本编码，用来对比「省略空字段」节省的长度 */
+const encodeRelayHashFull = (r: Resume) => '#r=2.' + compressToEncodedURIComponent(JSON.stringify(r))
 
 describe('接力链接编解码', () => {
   it('往返一致', () => {
@@ -12,6 +13,29 @@ describe('接力链接编解码', () => {
     r.work[0].highlights.push('', '末行')
     const parsed = parseRelayHash(encodeRelayHash(r))
     expect(parsed).toEqual({ kind: 'ok', resume: r })
+  })
+
+  it('携带外观时往返一致，未知外观被忽略', () => {
+    const r = sampleResume()
+    expect(parseRelayHash(encodeRelayHash(r, { templateId: 'duo', themeId: 'mint' }))).toEqual({
+      kind: 'ok',
+      resume: r,
+      look: { templateId: 'duo', themeId: 'mint' },
+    })
+    expect(parseRelayHash(encodeRelayHash(r, { themeId: 'warm' }))).toEqual({
+      kind: 'ok',
+      resume: r,
+      look: { themeId: 'warm' },
+    })
+    // 两个字段都不是已知取值时退回纯简历
+    const bad = '#r=2.' + compressToEncodedURIComponent(JSON.stringify({ r, t: 'nope', h: 'nope' }))
+    expect(parseRelayHash(bad)).toEqual({ kind: 'ok', resume: r })
+  })
+
+  it('旧版 v1 链接仍可解码', () => {
+    const r = sampleResume()
+    const legacy = '#r=1.' + compressToEncodedURIComponent(JSON.stringify(r))
+    expect(parseRelayHash(legacy)).toEqual({ kind: 'ok', resume: r })
   })
 
   it('空字段不写入链接，解码后补回默认值', () => {
@@ -24,8 +48,8 @@ describe('接力链接编解码', () => {
   })
 
   it('链接只在 hash 中携带数据，且替换掉已有 hash', () => {
-    const url = buildRelayUrl('https://a.com/showme/#old', sampleResume())
-    expect(url.startsWith('https://a.com/showme/#r=1.')).toBe(true)
+    const url = buildRelayUrl('https://a.com/showme/#old', sampleResume(), { templateId: 'air', themeId: 'forest' })
+    expect(url.startsWith('https://a.com/showme/#r=2.')).toBe(true)
     expect(new URL(url).pathname).toBe('/showme/')
     expect(new URL(url).search).toBe('')
   })
@@ -38,8 +62,8 @@ describe('接力链接编解码', () => {
   it('截断、篡改、未知版本均判为损坏', () => {
     const hash = encodeRelayHash(sampleResume())
     expect(parseRelayHash(hash.slice(0, hash.length - 40)).kind).toBe('broken')
-    expect(parseRelayHash('#r=1.not-valid-data')).toEqual({ kind: 'broken' })
-    expect(parseRelayHash(hash.replace('#r=1.', '#r=9.'))).toEqual({ kind: 'broken' })
+    expect(parseRelayHash('#r=2.not-valid-data')).toEqual({ kind: 'broken' })
+    expect(parseRelayHash(hash.replace('#r=2.', '#r=9.'))).toEqual({ kind: 'broken' })
     expect(parseRelayHash('#r=')).toEqual({ kind: 'broken' })
   })
 

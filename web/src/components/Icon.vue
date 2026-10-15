@@ -2,7 +2,7 @@
 /** 线性图标（24×24，描边风格，与 SF Symbols 观感接近） */
 export type IconName =
   | 'edit' | 'eye' | 'share' | 'print' | 'download' | 'upload' | 'up' | 'down'
-  | 'trash' | 'plus' | 'copy' | 'chevron' | 'close' | 'send' | 'check' | 'qr'
+  | 'trash' | 'plus' | 'copy' | 'chevron' | 'close' | 'send' | 'check' | 'qr' | 'expand'
 </script>
 
 <script setup lang="ts">
@@ -25,6 +25,7 @@ const paths: Record<IconName, string> = {
   send: 'M21 3L10 14M21 3l-7 18-4-7-7-4 18-7z',
   check: 'M5 12l5 5 9-10',
   qr: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2M14 20h2M18 18h2v2',
+  expand: 'M9 4H4v5M15 4h5v5M15 20h5v-5M9 20H4v-5',
 }
 </script>
 

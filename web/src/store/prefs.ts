@@ -5,6 +5,7 @@ import { storage } from './storage'
 /** 设备级偏好（不属于简历内容，将来云同步也不同步它） */
 const TEMPLATE_KEY = 'showme.template'
 const THEME_KEY = 'showme.theme'
+const ZOOM_KEY = 'showme.previewZoom'
 
 export function loadTemplatePref(): TemplateId {
   const v = storage.get(TEMPLATE_KEY)
@@ -22,4 +23,21 @@ export function loadThemePref(): ThemeId {
 
 export function saveThemePref(id: ThemeId): void {
   storage.set(THEME_KEY, id)
+}
+
+/** 预览缩放方式：整页（概览构图）/ 适应宽度 / 100% 原尺寸 */
+export const PREVIEW_ZOOMS = ['page', 'width', 'actual'] as const
+export type PreviewZoom = (typeof PREVIEW_ZOOMS)[number]
+
+export function isPreviewZoom(v: unknown): v is PreviewZoom {
+  return typeof v === 'string' && (PREVIEW_ZOOMS as readonly string[]).includes(v)
+}
+
+export function loadZoomPref(): PreviewZoom | null {
+  const v = storage.get(ZOOM_KEY)
+  return isPreviewZoom(v) ? v : null
+}
+
+export function saveZoomPref(v: PreviewZoom): void {
+  storage.set(ZOOM_KEY, v)
 }

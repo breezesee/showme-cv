@@ -1,12 +1,24 @@
 <script setup lang="ts">
+import { nextTick, ref } from 'vue'
 import { TEMPLATES, type TemplateId } from '../templates/catalog'
 
-/** iOS 风分段控件：选择模板 */
+/** iOS 风分段控件：选择模板；方向键在选项间移动并选中 */
 const model = defineModel<TemplateId>({ required: true })
+const groupEl = ref<HTMLElement>()
+
+function onKeydown(e: KeyboardEvent): void {
+  const dir = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0
+  if (!dir) return
+  e.preventDefault()
+  const i = TEMPLATES.findIndex((t) => t.id === model.value)
+  const next = (i + dir + TEMPLATES.length) % TEMPLATES.length
+  model.value = TEMPLATES[next].id
+  void nextTick(() => (groupEl.value?.children[next] as HTMLElement | undefined)?.focus())
+}
 </script>
 
 <template>
-  <div class="seg" role="radiogroup" aria-label="简历模板">
+  <div ref="groupEl" class="seg" role="radiogroup" aria-label="简历模板" @keydown="onKeydown">
     <button
       v-for="t in TEMPLATES"
       :key="t.id"
@@ -15,6 +27,7 @@ const model = defineModel<TemplateId>({ required: true })
       type="button"
       role="radio"
       :aria-checked="model === t.id"
+      :tabindex="model === t.id ? 0 : -1"
       @click="model = t.id"
     >
       {{ t.name }}
@@ -51,7 +64,7 @@ const model = defineModel<TemplateId>({ required: true })
   font-weight: 600;
   box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04), 0 3px 8px rgba(0, 0, 0, 0.08);
 }
-@media (max-width: 899.98px) {
+@media (max-width: 1099.98px) {
   .seg { display: flex; }
   .seg-item { flex: 1; min-height: 44px; }
 }
