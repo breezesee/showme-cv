@@ -9,6 +9,7 @@ import TemplatePicker from './components/TemplatePicker.vue'
 import TemplatePreview from './components/TemplatePreview.vue'
 import ThemePicker from './components/ThemePicker.vue'
 import ToastHost from './components/ToastHost.vue'
+import VersionFooter from './components/VersionFooter.vue'
 import Icon, { type IconName } from './components/Icon.vue'
 import { CloudRelayError, fetchShortLink } from './relay/cloud'
 import { parseRelayHash, type RelayPayload } from './relay/link'
@@ -126,6 +127,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
         <TemplatePreview :resume="resume" :template-id="templateId" :theme-id="themeId" bounded />
       </div>
     </main>
+    <VersionFooter />
     <Sheet v-model:open="shareOpen" title="分享与备份"><SharePanel /></Sheet>
   </div>
 
@@ -151,6 +153,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
         </button>
       </div>
       <SharePanel v-if="tab === 'share'" class="pane" />
+      <VersionFooter />
     </main>
     <nav class="tabbar glass" aria-label="主导航">
       <button

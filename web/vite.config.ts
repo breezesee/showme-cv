@@ -16,6 +16,25 @@ import { TEMPLATE_IDS } from './src/templates/catalog'
 const TEMPLATE_DIR = fileURLToPath(new URL('./templates', import.meta.url))
 const RUNTIME_MARK = '<!--showme:runtime-->'
 
+/** 版本号取自 package.json；构建时间取 vite 配置加载时刻（同一构建内保持一致） */
+const PKG = JSON.parse(readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8')) as { version: string }
+const BUILD_TIME = Date.now()
+
+/** 生成 dist/version.json：线上「检查更新」用 no-store 拉取并与注入到页面的构建时间比对 */
+function versionManifest(): Plugin {
+  return {
+    name: 'showme-version-manifest',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'version.json',
+        source: JSON.stringify({ version: PKG.version, buildTime: BUILD_TIME }),
+      })
+    },
+  }
+}
+
 function readTemplate(id: string): string {
   const read = (name: string) => readFileSync(join(TEMPLATE_DIR, name), 'utf8')
   const runtime = `<style>\n${read('runtime.css')}</style>\n<script>\n${read('runtime.js')}</script>`
@@ -86,10 +105,16 @@ async function handleNode(req: IncomingMessage, res: ServerResponse, env: RelayE
 export default defineConfig({
   // 相对路径：产物可部署在任意子路径（如 GitHub Pages 的 /仓库名/）
   base: './',
+  // 版本自检：页面内的 __APP_VERSION__ / __BUILD_TIME__ 与 dist/version.json 同源同值
+  define: {
+    __APP_VERSION__: JSON.stringify(PKG.version),
+    __BUILD_TIME__: JSON.stringify(BUILD_TIME),
+  },
   plugins: [
     vue(),
     sharedTemplates(),
     relayDev(),
+    versionManifest(),
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'script',

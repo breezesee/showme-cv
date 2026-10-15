@@ -64,8 +64,6 @@ SM.mount(function (d) {
   if (contacts) head += '<div class="r-contact">' + contacts + '</div>';
   if (head) html += '<header class="r-head" data-u>' + head + '</header>';
 
-  if (has(b.summary)) html += section('自我评价', SM.rich(b.summary));
-
   html += section('教育经历', (d.education || []).map(function (e) {
     var sub = [e.major, e.degree].filter(has).map(esc).join(' · ');
     return entry(esc(e.school || ''), period(e.start, e.end), sub, SM.rich(e.notes, 'muted'));
@@ -85,6 +83,8 @@ SM.mount(function (d) {
     if (!has(g.category) && !items) return '';
     return '<div class="skill-row" data-u><span class="skill-cat">' + esc(g.category || '') + '</span><span>' + items + '</span></div>';
   }).join(''));
+
+  if (has(b.summary)) html += section('自我评价', SM.rich(b.summary));
 
   return {
     sheet: function () { return '<div class="sheet"><div data-flow="main"></div></div>'; },

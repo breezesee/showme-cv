@@ -46,7 +46,7 @@
 <div id="app"></div>
 <script>
 /* 渲染契约：window.__showme_render(data)，由运行时 SM.mount 定义；分页标记说明见 runtime.js。
-   双栏版式：侧栏 = 联系方式 / 技能 / 教育经历；主栏 = 自我评价 / 工作经历 / 项目经历；每页都绘制侧栏底色 */
+   双栏版式：侧栏 = 联系方式 / 技能 / 教育经历；主栏 = 工作经历 / 项目经历 / 自我评价；每页都绘制侧栏底色 */
 SM.mount(function (d) {
   var esc = SM.esc, has = SM.has, lines = SM.lines, period = SM.period;
   var b = d.basics || {};
@@ -93,8 +93,6 @@ SM.mount(function (d) {
 
   /* 主栏 */
   var main = '';
-  if (has(b.summary)) main += mainSection('自我评价', SM.rich(b.summary));
-
   main += mainSection('工作经历', (d.work || []).map(function (w) {
     var body = SM.rich(w.description) + SM.list(w.highlights, 'bullets');
     return entry(esc(w.company || ''), period(w.start, w.end), has(w.position) ? esc(w.position) : '', body);
@@ -105,6 +103,8 @@ SM.mount(function (d) {
     if (has(p.role)) h += ' · ' + esc(p.role);
     return entry(h, period(p.start, p.end), '', SM.rich(p.description));
   }).join(''));
+
+  if (has(b.summary)) main += mainSection('自我评价', SM.rich(b.summary));
 
   return {
     sheet: function () {
