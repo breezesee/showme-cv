@@ -119,8 +119,6 @@ async function runExport(kind: ExportKind): Promise<void> {
 
 <template>
   <div class="share">
-    <CloudSyncPanel />
-
     <p v-if="isLocalhost" class="notice">
       当前为本机地址，其他设备无法打开此链接。请用电脑的局域网 IP 或正式网址访问 ShowMe 后再分享。
     </p>
@@ -250,6 +248,8 @@ async function runExport(kind: ExportKind): Promise<void> {
         <button class="btn" type="button" @click="importFromFile"><Icon name="upload" />导入备份</button>
       </div>
     </section>
+
+    <CloudSyncPanel />
   </div>
 </template>
 

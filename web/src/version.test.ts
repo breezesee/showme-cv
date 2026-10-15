@@ -79,8 +79,9 @@ describe('checkUpdate', () => {
   afterEach(() => vi.unstubAllGlobals())
 
   it('串联 fetch 与判断：远端新 → outdated', async () => {
+    // 远端构建时间必须晚于真实 BUILD_TIME（≈测试进程启动时刻），用相对偏移避免硬编码日期过期
     vi.stubGlobal('fetch', vi.fn(async () =>
-      new Response(JSON.stringify({ version: '9.9.9', buildTime: local(2026, 10, 16, 0, 0) }), { status: 200 }),
+      new Response(JSON.stringify({ version: '9.9.9', buildTime: Date.now() + 3_600_000 }), { status: 200 }),
     ))
     await expect(checkUpdate()).resolves.toBe('outdated')
   })
@@ -96,7 +97,7 @@ describe('assertUpToDate', () => {
 
   it('本地落后（outdated）→ 抛错并引导清除缓存刷新', async () => {
     vi.stubGlobal('fetch', vi.fn(async () =>
-      new Response(JSON.stringify({ version: '9.9.9', buildTime: local(2026, 10, 16, 0, 0) }), { status: 200 }),
+      new Response(JSON.stringify({ version: '9.9.9', buildTime: Date.now() + 3_600_000 }), { status: 200 }),
     ))
     await expect(assertUpToDate()).rejects.toThrow('清除缓存并刷新')
   })
