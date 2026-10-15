@@ -8,6 +8,7 @@ import { plainResume } from '../templates/loader'
 import { exportCurrent, exportPdf, exportWord, importFromFile, printResume } from '../ui/actions'
 import { showToast } from '../ui/toast'
 import Icon from './Icon.vue'
+import CloudSyncPanel from './CloudSyncPanel.vue'
 
 /** 分享页：分享（二维码 / 链接）、导出（PDF / Word / 备份）、导入。手机标签页与电脑弹层共用 */
 const { resume, templateId, themeId } = useResume()
@@ -118,6 +119,8 @@ async function runExport(kind: ExportKind): Promise<void> {
 
 <template>
   <div class="share">
+    <CloudSyncPanel />
+
     <p v-if="isLocalhost" class="notice">
       当前为本机地址，其他设备无法打开此链接。请用电脑的局域网 IP 或正式网址访问 ShowMe 后再分享。
     </p>

@@ -1,13 +1,16 @@
 import { ref, watch } from 'vue'
+import { normalizeResume } from '../model/normalize'
 import type { Resume } from '../model/resume'
+import { initCloud, notifySaved } from '../cloud/session'
 import type { TemplateId } from '../templates/catalog'
 import type { ThemeId } from '../templates/themes'
 import { loadTemplatePref, loadThemePref, saveTemplatePref, saveThemePref } from './prefs'
+import { HybridResumeStore } from './HybridResumeStore'
 import { LocalResumeStore, type LoadStatus, type ResumeStore } from './ResumeStore'
 
 const AUTOSAVE_DELAY = 300
 
-const store: ResumeStore = new LocalResumeStore()
+const store: ResumeStore = new HybridResumeStore(new LocalResumeStore(), notifySaved)
 const initial = store.load()
 
 /** 全局唯一的当前简历状态 */
@@ -51,6 +54,18 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') flush()
 })
 
+function replaceResume(next: Resume) {
+  resume.value = next
+  dirty = true
+  saving.value = true
+  flush()
+}
+
+void initCloud({
+  getLocal: () => normalizeResume(resume.value),
+  applyRemote: replaceResume,
+})
+
 export function useResume() {
   return {
     resume,
@@ -59,12 +74,6 @@ export function useResume() {
     saving,
     savedAt,
     initialStatus: initial.status as LoadStatus,
-    /** 整体替换当前简历（导入 JSON / 导入接力简历），并立即保存 */
-    replaceResume(next: Resume) {
-      resume.value = next
-      dirty = true
-      saving.value = true
-      flush()
-    },
+    replaceResume,
   }
 }
