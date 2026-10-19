@@ -6,23 +6,19 @@ import { fileURLToPath } from 'node:url'
 
 const OUT = fileURLToPath(new URL('../public/icons/', import.meta.url))
 
-// 图形定义（单位坐标 0..1）：蓝色渐变底 + 白色简历卡片
-const GRAD_FROM = [0x5a, 0xc8, 0xfa]
-const GRAD_TO = [0x0a, 0x84, 0xff]
+// 品牌标：奶油纸底 + 钴蓝取景角 + 金色句点（512 网格）
+const BG_FROM = [0xfa, 0xf7, 0xef]
+const BG_TO = [0xed, 0xe3, 0xd2]
+const BLUE = [0x20, 0x49, 0xd8]
+const GOLD = [0xc4, 0x92, 0x3f]
 const CORNER = 0.225 // 圆角版底板圆角半径
-const CARD = { x0: 0.3, y0: 0.24, x1: 0.7, y1: 0.76, r: 0.05 }
-const SHAPES = [
-  { kind: 'circle', cx: 0.395, cy: 0.355, r: 0.05, color: '#0a84ff' },
-  { kind: 'rect', x0: 0.475, y0: 0.322, x1: 0.63, y1: 0.35, color: '#3a3a3c' },
-  { kind: 'rect', x0: 0.475, y0: 0.368, x1: 0.58, y1: 0.39, color: '#c7c7cc' },
-  { kind: 'rect', x0: 0.345, y0: 0.46, x1: 0.47, y1: 0.484, color: '#0a84ff' },
-  { kind: 'rect', x0: 0.345, y0: 0.52, x1: 0.655, y1: 0.542, color: '#d1d1d6' },
-  { kind: 'rect', x0: 0.345, y0: 0.572, x1: 0.655, y1: 0.594, color: '#d1d1d6' },
-  { kind: 'rect', x0: 0.345, y0: 0.624, x1: 0.56, y1: 0.646, color: '#d1d1d6' },
-  { kind: 'rect', x0: 0.345, y0: 0.676, x1: 0.61, y1: 0.698, color: '#d1d1d6' },
+const STROKE_HALF = 26 // 取景角线宽 52 的一半
+// 两段取景角：两段直线 + 一个 60 半径的外圆角
+const BRACKETS = [
+  { segs: [[150, 240, 150, 210], [210, 150, 240, 150]], arc: [210, 210, 60, 180, 270] },
+  { segs: [[362, 272, 362, 302], [302, 362, 272, 362]], arc: [302, 302, 60, 0, 90] },
 ]
-
-const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16))
+const DOT = { cx: 256, cy: 256, r: 34 }
 
 function inRRect(x, y, x0, y0, x1, y1, r) {
   if (x < x0 || x > x1 || y < y0 || y > y1) return false
@@ -31,20 +27,38 @@ function inRRect(x, y, x0, y0, x1, y1, r) {
   return dx * dx + dy * dy <= r * r
 }
 
-function inShape(s, x, y) {
-  if (s.kind === 'circle') return (x - s.cx) ** 2 + (y - s.cy) ** 2 <= s.r * s.r
-  return inRRect(x, y, s.x0, s.y0, s.x1, s.y1, (s.y1 - s.y0) / 2)
+function inCapsule(x, y, ax, ay, bx, by, r) {
+  const dx = bx - ax
+  const dy = by - ay
+  const len2 = dx * dx + dy * dy
+  const t = len2 ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len2)) : 0
+  const px = ax + t * dx
+  const py = ay + t * dy
+  return (x - px) ** 2 + (y - py) ** 2 <= r * r
+}
+
+function inArc(x, y, cx, cy, r, half, a0, a1) {
+  if (Math.abs(Math.hypot(x - cx, y - cy) - r) > half) return false
+  let angle = (Math.atan2(y - cy, x - cx) * 180) / Math.PI
+  if (angle < 0) angle += 360
+  return angle >= a0 && angle <= a1
 }
 
 /** 单个采样点的颜色 [r,g,b,a]，a 为 0/1 */
 function sample(x, y, rounded) {
   if (rounded && !inRRect(x, y, 0, 0, 1, 1, CORNER)) return [0, 0, 0, 0]
-  for (let i = SHAPES.length - 1; i >= 0; i--) {
-    if (inShape(SHAPES[i], x, y)) return [...hex(SHAPES[i].color), 1]
+  const px = x * 512
+  const py = y * 512
+  if ((px - DOT.cx) ** 2 + (py - DOT.cy) ** 2 <= DOT.r ** 2) return [...GOLD, 1]
+  for (const { segs, arc } of BRACKETS) {
+    for (const [ax, ay, bx, by] of segs) {
+      if (inCapsule(px, py, ax, ay, bx, by, STROKE_HALF)) return [...BLUE, 1]
+    }
+    const [cx, cy, r, a0, a1] = arc
+    if (inArc(px, py, cx, cy, r, STROKE_HALF, a0, a1)) return [...BLUE, 1]
   }
-  if (inRRect(x, y, CARD.x0, CARD.y0, CARD.x1, CARD.y1, CARD.r)) return [255, 255, 255, 1]
   const t = Math.min(1, Math.max(0, (x + y) / 2))
-  return [...GRAD_FROM.map((v, i) => v + (GRAD_TO[i] - v) * t), 1]
+  return [...BG_FROM.map((v, i) => v + (BG_TO[i] - v) * t), 1]
 }
 
 function rasterize(size, rounded, ss = 4) {
@@ -109,18 +123,13 @@ function encodePng(size, rgba) {
 }
 
 function svg() {
-  const n = (v) => +(v * 512).toFixed(1)
-  const shapes = SHAPES.map((s) =>
-    s.kind === 'circle'
-      ? `<circle cx="${n(s.cx)}" cy="${n(s.cy)}" r="${n(s.r)}" fill="${s.color}"/>`
-      : `<rect x="${n(s.x0)}" y="${n(s.y0)}" width="${n(s.x1 - s.x0)}" height="${n(s.y1 - s.y0)}" rx="${n((s.y1 - s.y0) / 2)}" fill="${s.color}"/>`,
-  ).join('')
   const rgb = (c) => `rgb(${c.join(',')})`
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${rgb(GRAD_FROM)}"/><stop offset="1" stop-color="${rgb(GRAD_TO)}"/></linearGradient></defs>
-<rect width="512" height="512" rx="${n(CORNER)}" fill="url(#g)"/>
-<rect x="${n(CARD.x0)}" y="${n(CARD.y0)}" width="${n(CARD.x1 - CARD.x0)}" height="${n(CARD.y1 - CARD.y0)}" rx="${n(CARD.r)}" fill="#fff"/>
-${shapes}
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${rgb(BG_FROM)}"/><stop offset="1" stop-color="${rgb(BG_TO)}"/></linearGradient></defs>
+<rect width="512" height="512" rx="${(CORNER * 512).toFixed(1)}" fill="url(#g)"/>
+<path d="M150 240 L150 210 A60 60 0 0 1 210 150 L240 150" fill="none" stroke="${rgb(BLUE)}" stroke-width="52" stroke-linecap="round"/>
+<path d="M362 272 L362 302 A60 60 0 0 1 302 362 L272 362" fill="none" stroke="${rgb(BLUE)}" stroke-width="52" stroke-linecap="round"/>
+<circle cx="256" cy="256" r="34" fill="${rgb(GOLD)}"/>
 </svg>
 `
 }

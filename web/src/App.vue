@@ -154,7 +154,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
   <!-- 宽屏：顶部工具栏 + 编辑 / 预览双栏 -->
   <div v-else-if="isWide" class="wide">
     <header class="toolbar glass">
-      <div class="brand"><img :src="logo" alt="" width="28" height="28" />ShowMe</div>
+      <div class="brand"><img :src="logo" alt="" width="28" height="28" /><span class="brand-word">ShowMe<span class="brand-dot">.</span></span></div>
 
       <div class="doc-chip" :title="`${docLabel} · ${savedHint}`">
         <span class="doc-name">{{ docLabel }}</span>
@@ -289,8 +289,9 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
   padding: 0 24px;
   border-bottom: 1px solid var(--line);
 }
-.brand { flex: none; display: flex; align-items: center; gap: 10px; font-size: 19px; font-weight: 700; letter-spacing: 0.2px; }
+.brand { --brand-gold: #c4923f; flex: none; display: flex; align-items: center; gap: 10px; font-size: 19px; font-weight: 700; letter-spacing: 0.2px; }
 .brand img { border-radius: 7px; }
+.brand-dot { margin-left: -1px; color: var(--brand-gold); }
 .doc-chip {
   display: flex;
   align-items: center;
