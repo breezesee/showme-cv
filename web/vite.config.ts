@@ -146,7 +146,7 @@ export default defineConfig({
       manifest: {
         name: 'ShowMe 简历',
         short_name: 'ShowMe',
-        description: '手机、电脑都能编辑的简历工具，数据只存在你的设备上',
+        description: '手机、电脑都能编辑的简历工具，支持云端简历库与本地保存',
         lang: 'zh-CN',
         start_url: './',
         scope: './',

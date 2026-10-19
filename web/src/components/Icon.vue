@@ -3,6 +3,7 @@
 export type IconName =
   | 'edit' | 'eye' | 'share' | 'print' | 'download' | 'upload' | 'up' | 'down'
   | 'trash' | 'plus' | 'copy' | 'chevron' | 'close' | 'send' | 'check' | 'qr' | 'expand'
+  | 'save' | 'user'
 </script>
 
 <script setup lang="ts">
@@ -26,6 +27,8 @@ const paths: Record<IconName, string> = {
   check: 'M5 12l5 5 9-10',
   qr: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2M14 20h2M18 18h2v2',
   expand: 'M9 4H4v5M15 4h5v5M15 20h5v-5M9 20H4v-5',
+  save: 'M5 4h11l3 3v13H5zM8 4v6h8V4M8 20v-6h8v6',
+  user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0',
 }
 </script>
 

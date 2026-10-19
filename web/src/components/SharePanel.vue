@@ -8,7 +8,6 @@ import { plainResume } from '../templates/loader'
 import { exportCurrent, exportPdf, exportWord, importFromFile, printResume } from '../ui/actions'
 import { showToast } from '../ui/toast'
 import Icon from './Icon.vue'
-import CloudSyncPanel from './CloudSyncPanel.vue'
 
 /** 分享页：分享（二维码 / 链接）、导出（PDF / Word / 备份）、导入。手机标签页与电脑弹层共用 */
 const { resume, templateId, themeId } = useResume()
@@ -122,6 +121,8 @@ async function runExport(kind: ExportKind): Promise<void> {
     <p v-if="isLocalhost" class="notice">
       当前为本机地址，其他设备无法打开此链接。请用电脑的局域网 IP 或正式网址访问 ShowMe 后再分享。
     </p>
+
+    <p class="hint share-note">分享与导出的都是当前编辑中的内容，包含尚未保存的修改。</p>
 
     <!-- 分享：二维码是主角 -->
     <section class="card block">
@@ -242,20 +243,19 @@ async function runExport(kind: ExportKind): Promise<void> {
     <section class="card block">
       <header class="zone-head">
         <h3>导入</h3>
-        <p class="hint">从备份文件（JSON）恢复简历。覆盖当前内容前会先和你确认，不会直接覆盖。</p>
+        <p class="hint">从备份文件（JSON）恢复简历。导入后会成为一份未保存的草稿，确认内容后点击「保存」。</p>
       </header>
       <div class="actions">
         <button class="btn" type="button" @click="importFromFile"><Icon name="upload" />导入备份</button>
       </div>
     </section>
-
-    <CloudSyncPanel />
   </div>
 </template>
 
 <style scoped>
 .share { display: flex; flex-direction: column; gap: 16px; }
 .share > .notice { margin: 0; }
+.share-note { margin: 0; }
 .block { padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 12px; }
 .zone-head { display: flex; flex-direction: column; gap: 2px; }
 .zone-head h3 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: 0.2px; }

@@ -32,7 +32,7 @@ async function importIncoming(): Promise<void> {
     replaceResume(props.incoming.resume)
     templateId.value = localTemplateId.value
     themeId.value = localThemeId.value
-    showToast('已导入为我的简历', 'success')
+    showToast('已导入，检查后请点击「保存」', 'success')
   }
   emit('close')
 }
@@ -53,13 +53,13 @@ async function importIncoming(): Promise<void> {
 
     <main class="rv-body">
       <section v-if="!viewOnly" class="card rv-prompt">
-        <p>这是通过链接收到的「{{ name }}」的简历，尚未保存到本机。</p>
-        <button class="btn btn-primary btn-block" type="button" @click="importIncoming">导入为我的简历</button>
+        <p>这是通过链接收到的「{{ name }}」的简历。导入后会替换当前编辑中的内容，并作为一份未保存草稿。</p>
+        <button class="btn btn-primary btn-block" type="button" @click="importIncoming">导入并继续编辑</button>
         <button class="btn btn-block" type="button" @click="viewOnly = true">仅查看</button>
       </section>
       <div v-else class="rv-inline">
-        <span class="hint">仅查看，关闭后本机简历保持不变</span>
-        <button class="btn" type="button" @click="importIncoming">导入为我的简历</button>
+        <span class="hint">仅查看，关闭后本机内容保持不变</span>
+        <button class="btn" type="button" @click="importIncoming">导入并继续编辑</button>
       </div>
 
       <div class="rv-pickers">

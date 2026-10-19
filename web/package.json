@@ -1,7 +1,7 @@
 {
   "name": "showme-web",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "description": "ShowMe 简历 · 响应式网页版（手机 / PC 自适应，PWA）",
   "scripts": {

@@ -7,7 +7,7 @@ import LinesField from './LinesField.vue'
 import SectionCard from './SectionCard.vue'
 import TextField from './TextField.vue'
 
-const { resume, saving, savedAt } = useResume()
+const { resume, saving, savedAt, dirty } = useResume()
 
 const open = reactive({ basics: true, education: false, work: false, projects: false, skills: false, summary: false })
 
@@ -18,8 +18,9 @@ const RICH_HINT = '回车换行，空行分段，以「-」开头的行显示为
 const pad = (n: number) => String(n).padStart(2, '0')
 const saveText = computed(() => {
   if (saving.value) return '保存中…'
+  if (dirty.value) return '有未保存的修改'
   const t = savedAt.value
-  return t ? `已自动保存 ${pad(new Date(t).getHours())}:${pad(new Date(t).getMinutes())}` : '修改会自动保存在此浏览器'
+  return t ? `已保存 ${pad(new Date(t).getHours())}:${pad(new Date(t).getMinutes())}` : '修改后请点击「保存」'
 })
 </script>
 
@@ -105,12 +106,12 @@ const saveText = computed(() => {
       <TextField v-model="resume.basics.summary" label="介绍自己" multiline :rows="5" :hint="RICH_HINT" />
     </SectionCard>
 
-    <p class="hint autosave" aria-live="polite">{{ saveText }}</p>
+    <p class="hint save-state" aria-live="polite">{{ saveText }}</p>
   </div>
 </template>
 
 <style scoped>
 .editor { display: flex; flex-direction: column; gap: 16px; }
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.autosave { text-align: center; margin: 4px 0 0; }
+.save-state { text-align: center; margin: 4px 0 0; }
 </style>

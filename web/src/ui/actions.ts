@@ -64,16 +64,16 @@ export async function importFromFile(): Promise<void> {
   }
   if (!(await confirmOverwrite(picked))) return
   replaceResume(picked)
-  showToast('已导入备份文件', 'success')
+  showToast('已导入，检查后请点击「保存」', 'success')
 }
 
-/** 覆盖本机简历前的二次确认（展示对方姓名，降低误覆盖） */
+/** 导入前确认：会替换当前编辑中的内容，并作为未保存草稿（展示对方姓名，降低误操作） */
 export function confirmOverwrite(incoming: Resume): Promise<boolean> {
   const name = incoming.basics.name.trim() || '未命名'
   return confirmDialog({
-    title: '覆盖本机简历？',
-    message: `将用「${name}」的简历覆盖本机当前简历，覆盖后无法恢复。可先「导出备份」再导入。`,
-    confirmText: '覆盖',
+    title: '导入并替换当前内容？',
+    message: `将用「${name}」的简历替换当前编辑中的内容，并作为一份未保存草稿。当前未保存的修改会丢失。`,
+    confirmText: '导入',
     danger: true,
   })
 }
