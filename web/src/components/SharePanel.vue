@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import QRCode from 'qrcode'
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { cloudSupported, CloudRelayError, createShortLink } from '../relay/cloud'
-import { buildRelayUrl, type RelayLook } from '../relay/link'
+import { buildRelayUrl, type RelayLook, type SharePermission } from '../relay/link'
 import { useResume } from '../store/useResume'
 import { plainResume } from '../templates/loader'
 import { exportCurrent, exportPdf, exportWord, importFromFile, printResume } from '../ui/actions'
@@ -17,11 +17,29 @@ const isLocalhost = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(location
 const canShare = typeof navigator.share === 'function'
 const canEncrypt = cloudSupported()
 
+// ---------- 对方打开后的权限 ----------
+const PERMISSIONS: { id: SharePermission; label: string }[] = [
+  { id: 'edit', label: '允许编辑' },
+  { id: 'view', label: '仅查看' },
+]
+const permission = ref<SharePermission>('edit')
+const permGroup = ref<HTMLElement>()
+
+function onPermKeydown(e: KeyboardEvent): void {
+  const dir = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0
+  if (!dir) return
+  e.preventDefault()
+  const i = PERMISSIONS.findIndex((p) => p.id === permission.value)
+  const next = (i + dir + PERMISSIONS.length) % PERMISSIONS.length
+  permission.value = PERMISSIONS[next]!.id
+  void nextTick(() => (permGroup.value?.children[next] as HTMLElement | undefined)?.focus())
+}
+
 const current = computed(() => plainResume(resume.value))
 /** 发送时的外观也随简历接力，接收方看到的就是你这边的排版与配色 */
 const look = computed<RelayLook>(() => ({ templateId: templateId.value, themeId: themeId.value }))
-const currentJson = computed(() => JSON.stringify([current.value, look.value]))
-const longUrl = computed(() => buildRelayUrl(pageUrl(), current.value, look.value))
+const currentJson = computed(() => JSON.stringify([current.value, look.value, permission.value]))
+const longUrl = computed(() => buildRelayUrl(pageUrl(), current.value, look.value, permission.value))
 
 // ---------- 分享：短链接与二维码 ----------
 interface Generated {
@@ -30,6 +48,7 @@ interface Generated {
   expiresAt: number
   /** 生成时的简历快照，用于判断之后是否改过 */
   snapshot: string
+  permission: SharePermission
 }
 const generated = ref<Generated | null>(null)
 const busy = ref(false)
@@ -47,10 +66,11 @@ async function generate(): Promise<void> {
   busy.value = true
   failure.value = ''
   const snapshot = currentJson.value
+  const mode = permission.value
   try {
-    const link = await createShortLink(current.value, pageUrl(), look.value)
+    const link = await createShortLink(current.value, pageUrl(), look.value, mode)
     const qr = await QRCode.toDataURL(link.url, { errorCorrectionLevel: 'M', margin: 2, width: 480 })
-    generated.value = { url: link.url, qr, expiresAt: link.expiresAt, snapshot }
+    generated.value = { url: link.url, qr, expiresAt: link.expiresAt, snapshot, permission: mode }
   } catch (e) {
     generated.value = null
     failure.value = e instanceof CloudRelayError ? e.message : '未知错误'
@@ -131,6 +151,27 @@ async function runExport(kind: ExportKind): Promise<void> {
         <p class="hint">简历在本机加密后换成短链接和二维码，7 天有效。服务器只保存密文，解密钥匙只在链接里。</p>
       </header>
 
+      <div class="perm-row">
+        <div ref="permGroup" class="perm" role="radiogroup" aria-label="对方打开后的权限" @keydown="onPermKeydown">
+          <button
+            v-for="opt in PERMISSIONS"
+            :key="opt.id"
+            class="perm-item"
+            :class="{ active: permission === opt.id }"
+            type="button"
+            role="radio"
+            :aria-checked="permission === opt.id"
+            :tabindex="permission === opt.id ? 0 : -1"
+            @click="permission = opt.id"
+          >
+            {{ opt.label }}
+          </button>
+        </div>
+        <p class="hint perm-hint">
+          {{ permission === 'view' ? '对方只能查看与导出 PDF，不能导入或修改排版。' : '对方可导入一份自己的副本继续编辑，不会改动你的原件。' }}
+        </p>
+      </div>
+
       <p v-if="!canEncrypt" class="notice">
         当前访问地址不是 https，浏览器无法加密，不能生成二维码。请通过 https 网址访问，或改用下方的离线长链接。
       </p>
@@ -159,7 +200,8 @@ async function runExport(kind: ExportKind): Promise<void> {
               </button>
             </div>
             <p class="badges">
-              <span v-if="stale" class="badge warn">内容已修改</span>
+              <span v-if="stale" class="badge warn">内容或权限已修改</span>
+              <span class="badge">{{ generated.permission === 'view' ? '仅查看' : '可编辑' }}</span>
               <span class="badge">{{ stale ? '重新生成后生效' : `7 天内有效 · 至 ${expiresText}` }}</span>
             </p>
             <div class="actions">
@@ -172,7 +214,9 @@ async function runExport(kind: ExportKind): Promise<void> {
             </div>
           </template>
           <template v-else>
-            <p class="hint">扫码或打开链接即可导入这份简历，电脑手机互传都行。</p>
+            <p class="hint">
+              扫码或打开链接即可{{ permission === 'view' ? '查看' : '导入' }}这份简历，电脑手机互传都行。
+            </p>
             <div class="actions">
               <button class="btn btn-primary" type="button" :disabled="busy" @click="generate">
                 <Icon name="qr" />{{ busy ? '生成中…' : '生成二维码' }}
@@ -260,6 +304,38 @@ async function runExport(kind: ExportKind): Promise<void> {
 .zone-head { display: flex; flex-direction: column; gap: 2px; }
 .zone-head h3 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: 0.2px; }
 .zone-head .hint { margin: 0; }
+
+/* 权限分段控件：与模板选择器同一套 iOS 风外观 */
+.perm-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.perm { display: inline-flex; padding: 2px; border-radius: 11px; background: var(--fill); }
+.perm-item {
+  min-width: 76px;
+  min-height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s var(--ease), box-shadow 0.2s var(--ease), color 0.2s var(--ease);
+}
+@media (hover: hover) {
+  .perm-item:not(.active):hover { color: var(--muted); }
+}
+.perm-item.active {
+  background: #fff;
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04), 0 3px 8px rgba(0, 0, 0, 0.08);
+}
+.perm-hint { margin: 0; }
+@media (max-width: 1099.98px) {
+  .perm { display: flex; flex: 1; }
+  .perm-item { flex: 1; min-height: 40px; }
+  .perm-hint { flex-basis: 100%; }
+}
 
 /* 二维码舞台：生成前后占同一块位置，面板不跳动 */
 .share-main { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 20px; }

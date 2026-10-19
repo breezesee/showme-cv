@@ -32,16 +32,30 @@ async function errorOf(p: Promise<unknown>): Promise<CloudRelayError> {
 }
 
 describe('短码中转：加解密', () => {
-  it('往返一致，外观随简历一起传输', async () => {
+  it('往返一致，外观与权限随简历一起传输', async () => {
     const r = sampleResume()
     r.basics.name = '张三 <b>&</b> 🚀'
     const { payload, key } = await sealResume(r, { templateId: 'air', themeId: 'dusk' })
     expect(key).toMatch(/^[A-Za-z0-9_-]{22}$/)
     expect(payload).toMatch(/^[A-Za-z0-9_-]+$/)
-    expect(await openResume(payload, key)).toEqual({ resume: r, look: { templateId: 'air', themeId: 'dusk' } })
+    expect(await openResume(payload, key)).toEqual({
+      resume: r,
+      look: { templateId: 'air', themeId: 'dusk' },
+      permission: 'edit',
+    })
     // 不带外观时解出纯简历
     const plain = await sealResume(r)
-    expect(await openResume(plain.payload, plain.key)).toEqual({ resume: r })
+    expect(await openResume(plain.payload, plain.key)).toEqual({ resume: r, permission: 'edit' })
+  })
+
+  it('仅查看权限随密文往返', async () => {
+    const r = sampleResume()
+    const sealed = await sealResume(r, { themeId: 'mint' }, 'view')
+    expect(await openResume(sealed.payload, sealed.key)).toEqual({
+      resume: r,
+      look: { themeId: 'mint' },
+      permission: 'view',
+    })
   })
 
   it('密钥错误或密文被篡改判为损坏', async () => {
@@ -60,15 +74,19 @@ describe('短码中转：加解密', () => {
 })
 
 describe('短码中转：端到端', () => {
-  it('生成短链接 → 另一端取回，内容与外观一致，服务器只有密文', async () => {
+  it('生成短链接 → 另一端取回，内容、外观与权限一致，服务器只有密文', async () => {
     const server = fakeServer()
     const r = sampleResume()
     const look = { templateId: 'duo', themeId: 'rose' } as const
-    const link = await createShortLink(r, PAGE + '#old', look, server.fetchImpl)
+    const link = await createShortLink(r, PAGE + '#old', look, 'view', server.fetchImpl)
     expect(link.url.length).toBeLessThan(120)
     const parsed = parseRelayHash(new URL(link.url).hash)
     if (parsed.kind !== 'cloud') throw new Error(parsed.kind)
-    expect(await fetchShortLink(parsed.id, parsed.key, link.url, server.fetchImpl, noWait)).toEqual({ resume: r, look })
+    expect(await fetchShortLink(parsed.id, parsed.key, link.url, server.fetchImpl, noWait)).toEqual({
+      resume: r,
+      look,
+      permission: 'view',
+    })
 
     expect(server.stored).toHaveLength(1)
     expect(server.stored[0]).not.toContain(parsed.key)
@@ -88,7 +106,7 @@ describe('短码中转：端到端', () => {
   it('7 天后过期', async () => {
     let now = 1_000_000
     const server = fakeServer(() => now)
-    const link = await createShortLink(sampleResume(), PAGE, undefined, server.fetchImpl)
+    const link = await createShortLink(sampleResume(), PAGE, undefined, 'edit', server.fetchImpl)
     const parsed = parseRelayHash(new URL(link.url).hash)
     if (parsed.kind !== 'cloud') throw new Error(parsed.kind)
     now += RELAY_TTL_SECONDS * 1000 - 1
@@ -101,12 +119,12 @@ describe('短码中转：端到端', () => {
     const offline = (async () => {
       throw new TypeError('Failed to fetch')
     }) as typeof fetch
-    expect((await errorOf(createShortLink(sampleResume(), PAGE, undefined, offline))).kind).toBe('network')
+    expect((await errorOf(createShortLink(sampleResume(), PAGE, undefined, 'edit', offline))).kind).toBe('network')
     expect((await errorOf(fetchShortLink('a1B2c3D4e5', 'k'.repeat(22), PAGE, offline, noWait))).kind).toBe('network')
 
     // 未部署中转时，静态托管通常返回首页 HTML
     const html = (async () => new Response('<!doctype html>', { status: 200 })) as typeof fetch
-    expect((await errorOf(createShortLink(sampleResume(), PAGE, undefined, html))).kind).toBe('server')
+    expect((await errorOf(createShortLink(sampleResume(), PAGE, undefined, 'edit', html))).kind).toBe('server')
   })
 })
 
@@ -123,7 +141,7 @@ describe('中转接口', () => {
 
   it('非法短码与错误方法', async () => {
     const e = env()
-    expect((await routeRelay(new Request('https://x/api/relay/a1B2c3D4e%21'), e))?.status).toBe(404)
+    expect((await routeRelay(new Request('https://x/api/relay/a1B2c3D4e5%21'), e))?.status).toBe(404)
     expect((await routeRelay(new Request('https://x/api/relay/short'), e))?.status).toBe(404)
     expect((await routeRelay(new Request('https://x/api/relay'), e))?.status).toBe(405)
     expect((await routeRelay(new Request('https://x/api/relay/a1B2c3D4e5', { method: 'DELETE' }), e))?.status).toBe(405)

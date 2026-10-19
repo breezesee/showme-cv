@@ -12,7 +12,7 @@ describe('接力链接编解码', () => {
     r.basics.name = '张三 <b>&$\'"</b> 🚀'
     r.work[0].highlights.push('', '末行')
     const parsed = parseRelayHash(encodeRelayHash(r))
-    expect(parsed).toEqual({ kind: 'ok', resume: r })
+    expect(parsed).toEqual({ kind: 'ok', resume: r, permission: 'edit' })
   })
 
   it('携带外观时往返一致，未知外观被忽略', () => {
@@ -21,21 +21,47 @@ describe('接力链接编解码', () => {
       kind: 'ok',
       resume: r,
       look: { templateId: 'duo', themeId: 'mint' },
+      permission: 'edit',
     })
     expect(parseRelayHash(encodeRelayHash(r, { themeId: 'warm' }))).toEqual({
       kind: 'ok',
       resume: r,
       look: { themeId: 'warm' },
+      permission: 'edit',
     })
     // 两个字段都不是已知取值时退回纯简历
     const bad = '#r=2.' + compressToEncodedURIComponent(JSON.stringify({ r, t: 'nope', h: 'nope' }))
-    expect(parseRelayHash(bad)).toEqual({ kind: 'ok', resume: r })
+    expect(parseRelayHash(bad)).toEqual({ kind: 'ok', resume: r, permission: 'edit' })
+  })
+
+  it('权限随长链接往返', () => {
+    const r = sampleResume()
+    const viewUrl = buildRelayUrl('https://a.com/showme/', r, { templateId: 'air' }, 'view')
+    expect(parseRelayHash(new URL(viewUrl).hash)).toEqual({
+      kind: 'ok',
+      resume: r,
+      look: { templateId: 'air' },
+      permission: 'view',
+    })
+    expect(parseRelayHash(encodeRelayHash(r, undefined, 'edit'))).toEqual({
+      kind: 'ok',
+      resume: r,
+      permission: 'edit',
+    })
+  })
+
+  it('缺少或未知权限的旧数据默认允许编辑', () => {
+    const r = sampleResume()
+    const withoutPermission = '#r=2.' + compressToEncodedURIComponent(JSON.stringify({ r }))
+    expect(parseRelayHash(withoutPermission)).toEqual({ kind: 'ok', resume: r, permission: 'edit' })
+    const unknown = '#r=2.' + compressToEncodedURIComponent(JSON.stringify({ r, p: 'admin' }))
+    expect(parseRelayHash(unknown)).toEqual({ kind: 'ok', resume: r, permission: 'edit' })
   })
 
   it('旧版 v1 链接仍可解码', () => {
     const r = sampleResume()
     const legacy = '#r=1.' + compressToEncodedURIComponent(JSON.stringify(r))
-    expect(parseRelayHash(legacy)).toEqual({ kind: 'ok', resume: r })
+    expect(parseRelayHash(legacy)).toEqual({ kind: 'ok', resume: r, permission: 'edit' })
   })
 
   it('空字段不写入链接，解码后补回默认值', () => {
@@ -44,7 +70,7 @@ describe('接力链接编解码', () => {
     r.work.push({ ...emptyWork(), company: 'A' })
     const hash = encodeRelayHash(r)
     expect(hash.length).toBeLessThan(encodeRelayHashFull(r).length)
-    expect(parseRelayHash(hash)).toEqual({ kind: 'ok', resume: r })
+    expect(parseRelayHash(hash)).toEqual({ kind: 'ok', resume: r, permission: 'edit' })
   })
 
   it('链接只在 hash 中携带数据，且替换掉已有 hash', () => {

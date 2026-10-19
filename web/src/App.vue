@@ -6,6 +6,7 @@ import ReceivedView from './components/ReceivedView.vue'
 import ResumeEditor from './components/ResumeEditor.vue'
 import SaveResumeForm from './components/SaveResumeForm.vue'
 import SharePanel from './components/SharePanel.vue'
+import SharedResumeView from './components/SharedResumeView.vue'
 import Sheet from './components/Sheet.vue'
 import TemplatePicker from './components/TemplatePicker.vue'
 import TemplatePreview from './components/TemplatePreview.vue'
@@ -21,7 +22,7 @@ import { exportCurrent, exportPdf, importFromFile } from './ui/actions'
 import { showToast } from './ui/toast'
 import { useMediaQuery } from './ui/useMediaQuery'
 
-const { resume, templateId, themeId, initialStatus, account, dirty, docName, savedAt } = useResume()
+const { resume, templateId, themeId, initialStatus, account, dirty, docName, savedAt, createNewDocument } = useResume()
 const isWide = useMediaQuery('(min-width: 1100px)')
 const logo = `${import.meta.env.BASE_URL}icons/icon.svg`
 
@@ -58,8 +59,9 @@ function consumeRelayHash(): boolean {
   // 先清掉地址中的数据：刷新不会重复弹出，数据和密钥也不会留在浏览历史里
   history.replaceState(history.state, '', location.pathname + location.search)
   if (result.kind === 'broken') showToast('链接已损坏，未导入任何内容', 'error', 4000)
-  else if (result.kind === 'ok') incoming.value = { resume: result.resume, look: result.look }
-  else void receiveShortLink(result.id, result.key)
+  else if (result.kind === 'ok') {
+    incoming.value = { resume: result.resume, look: result.look, permission: result.permission }
+  } else void receiveShortLink(result.id, result.key)
   return true
 }
 
@@ -81,7 +83,19 @@ function onHashChange(): void {
 
 function closeIncoming(): void {
   incoming.value = null
+  // 接收页会盖住主界面：关掉此前打开的弹层，避免关闭分享后旧表单重新弹出
+  shareOpen.value = false
+  saveOpen.value = false
+  accountOpen.value = false
   window.scrollTo(0, 0)
+}
+
+/** 从分享页新建自己的空白简历：不复制对方内容，也不改动自己已有的简历库 */
+async function createOwnFromShared(): Promise<void> {
+  if (!(await createNewDocument())) return
+  closeIncoming()
+  selectTab('edit')
+  showToast('已新建空白简历，编辑后记得保存', 'info', 3500)
 }
 
 function selectTab(next: Tab): void {
@@ -124,7 +138,18 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
 </script>
 
 <template>
-  <ReceivedView v-if="incoming" :incoming="incoming" @close="closeIncoming" />
+  <SharedResumeView
+    v-if="incoming && incoming.permission === 'view'"
+    :incoming="incoming"
+    @close="closeIncoming"
+    @create-own="createOwnFromShared"
+  />
+  <ReceivedView
+    v-else-if="incoming"
+    :incoming="incoming"
+    @close="closeIncoming"
+    @create-own="createOwnFromShared"
+  />
 
   <!-- 宽屏：顶部工具栏 + 编辑 / 预览双栏 -->
   <div v-else-if="isWide" class="wide">

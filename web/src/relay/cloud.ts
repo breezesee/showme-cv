@@ -1,6 +1,6 @@
 import { compressToUint8Array, decompressFromUint8Array } from 'lz-string'
 import type { Resume } from '../model/resume'
-import { buildShortUrl, decodeRelayData, encodeRelayData, type RelayLook, type RelayPayload } from './link'
+import { buildShortUrl, decodeRelayData, encodeRelayData, type RelayLook, type RelayPayload, type SharePermission } from './link'
 
 /**
  * 短码分享（二维码主路径）：浏览器端加密 → 上传密文换短码 → 链接只含短码与密钥。
@@ -39,12 +39,16 @@ export function fromBase64Url(text: string): Uint8Array<ArrayBuffer> {
   return out
 }
 
-/** 加密简历（含外观选择），返回上传用的密文与放进链接的密钥 */
-export async function sealResume(resume: Resume, look?: RelayLook): Promise<{ payload: string; key: string }> {
+/** 加密简历（含外观与访问权限），返回上传用的密文与放进链接的密钥 */
+export async function sealResume(
+  resume: Resume,
+  look?: RelayLook,
+  permission: SharePermission = 'edit',
+): Promise<{ payload: string; key: string }> {
   const cryptoKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 128 }, true, ['encrypt'])
   const raw = new Uint8Array(await crypto.subtle.exportKey('raw', cryptoKey))
   const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES))
-  const plain = new Uint8Array(compressToUint8Array(encodeRelayData(resume, look)))
+  const plain = new Uint8Array(compressToUint8Array(encodeRelayData(resume, look, permission)))
   const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, cryptoKey, plain))
   const packed = new Uint8Array(IV_BYTES + sealed.length)
   packed.set(iv)
@@ -85,10 +89,11 @@ export async function createShortLink(
   resume: Resume,
   pageUrl: string,
   look?: RelayLook,
+  permission: SharePermission = 'edit',
   fetchImpl: typeof fetch = fetch,
 ): Promise<ShortLink> {
   if (!cloudSupported()) throw new CloudRelayError('unsupported', '当前环境不支持加密（需 https 访问）')
-  const { payload, key } = await sealResume(resume, look)
+  const { payload, key } = await sealResume(resume, look, permission)
   let res: Response
   try {
     res = await fetchImpl(apiUrl(pageUrl), {

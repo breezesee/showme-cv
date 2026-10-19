@@ -14,7 +14,7 @@ import ThemePicker from './ThemePicker.vue'
 
 /** 「收到的简历」：只读预览接力链接带来的简历，由用户决定导入或仅查看 */
 const props = defineProps<{ incoming: RelayPayload }>()
-const emit = defineEmits<{ close: [] }>()
+const emit = defineEmits<{ close: []; 'create-own': [] }>()
 
 const { resume, templateId, themeId, replaceResume } = useResume()
 const viewOnly = ref(false)
@@ -56,10 +56,14 @@ async function importIncoming(): Promise<void> {
         <p>这是通过链接收到的「{{ name }}」的简历。导入后会替换当前编辑中的内容，并作为一份未保存草稿。</p>
         <button class="btn btn-primary btn-block" type="button" @click="importIncoming">导入并继续编辑</button>
         <button class="btn btn-block" type="button" @click="viewOnly = true">仅查看</button>
+        <button class="rv-own" type="button" @click="emit('create-own')">不用这份，新建我自己的简历</button>
       </section>
       <div v-else class="rv-inline">
         <span class="hint">仅查看，关闭后本机内容保持不变</span>
-        <button class="btn" type="button" @click="importIncoming">导入并继续编辑</button>
+        <div class="rv-inline-actions">
+          <button class="btn btn-plain" type="button" @click="emit('create-own')">新建我的简历</button>
+          <button class="btn" type="button" @click="importIncoming">导入并继续编辑</button>
+        </div>
       </div>
 
       <div class="rv-pickers">
@@ -121,5 +125,19 @@ async function importIncoming(): Promise<void> {
 .rv-prompt { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
 .rv-prompt p { margin: 0 0 6px; line-height: 1.6; }
 .rv-inline { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.rv-inline-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rv-own {
+  align-self: center;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .rv-own:hover { color: var(--accent); text-decoration: underline; }
+}
 .rv-pickers { display: flex; flex-direction: column; gap: 10px; }
 </style>
