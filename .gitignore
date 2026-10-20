@@ -11,6 +11,8 @@
 
 # 本地临时目录（不入库）
 /_local/
+/.netlify/
+/vibe_images/
 
 # 依赖与构建产物
 node_modules/
