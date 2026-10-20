@@ -39,7 +39,14 @@ function runClear(): void {
     <button class="ver-btn" type="button" :disabled="checking" @click="runCheck">
       <span v-if="outdated" class="dot" aria-hidden="true" />{{ checking ? '检查中…' : '检查更新' }}
     </button>
-    <button class="ver-btn" type="button" @click="runClear">清除缓存并刷新</button>
+    <!-- 维护操作收进「更多」，避免在正常浏览时抢注意力 -->
+    <details class="ver-more">
+      <summary class="ver-btn">更多</summary>
+      <div class="ver-panel">
+        <p class="ver-hint">页面异常，或更新后仍显示旧版时使用。</p>
+        <button class="ver-btn danger" type="button" @click="runClear">清除缓存并刷新</button>
+      </div>
+    </details>
   </footer>
 </template>
 
@@ -68,9 +75,29 @@ function runClear(): void {
   color: var(--muted);
   font-size: 12px;
   cursor: pointer;
+  list-style: none;
 }
+.ver-btn::-webkit-details-marker { display: none; }
 .ver-btn:hover { color: var(--accent); }
 .ver-btn:disabled { opacity: 0.6; cursor: default; }
+.ver-more { position: relative; }
+.ver-panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  width: min(240px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: var(--shadow-md);
+  text-align: left;
+}
+.ver-hint { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.ver-btn.danger { color: var(--danger); padding: 2px 0; }
 .dot {
   width: 7px;
   height: 7px;

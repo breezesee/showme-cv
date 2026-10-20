@@ -1,42 +1,108 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { requestPasswordReset } from '../cloud/account'
 import { authErrorMessage } from '../cloud/authErrors'
+import { emailError, normalizeEmail } from '../model/email'
 import { login, register, useResume } from '../store/useResume'
+import Icon from './Icon.vue'
 
-/** 登录 / 注册表单：桌面个人中心与手机「我的」页共用 */
+/** 登录 / 注册 / 找回密码：桌面个人中心与手机「我的」页共用 */
 const { account } = useResume()
 
-const mode = ref<'login' | 'register'>('login')
+type Mode = 'login' | 'register' | 'forgot'
+const mode = ref<Mode>('login')
 const email = ref('')
 const password = ref('')
 const confirm = ref('')
 const busy = ref(false)
 const error = ref('')
+const emailTouched = ref(false)
+const sent = ref(false)
+const cooldown = ref(0)
+const emailInput = ref<HTMLInputElement>()
+let timer: number | undefined
+
+const emailFieldError = computed(() => (emailTouched.value ? emailError(email.value) : null))
+const sentTo = computed(() => normalizeEmail(email.value))
+
+const title = computed(() => {
+  if (mode.value === 'forgot') return '找回密码'
+  return mode.value === 'login' ? '登录账号' : '创建账号'
+})
+
+const subtitle = computed(() => {
+  if (mode.value === 'forgot') return '输入注册邮箱，我们会发送重置链接。'
+  return mode.value === 'login' ? '登录后打开你的云端简历库。' : '注册后即可把简历保存到云端，换设备不丢。'
+})
 
 const actionText = computed(() => {
   if (busy.value) return '请稍候…'
+  if (mode.value === 'forgot') return sent.value ? '重新发送' : '发送重置邮件'
   return mode.value === 'login' ? '登录' : '创建账号'
 })
 
+function startCooldown(): void {
+  stopTimer()
+  cooldown.value = 60
+  timer = window.setInterval(() => {
+    cooldown.value -= 1
+    if (cooldown.value <= 0) stopTimer()
+  }, 1000)
+}
+
+function stopTimer(): void {
+  if (timer !== undefined) {
+    clearInterval(timer)
+    timer = undefined
+  }
+}
+
+onBeforeUnmount(stopTimer)
+
 function validate(): string | null {
   if (!account.available) return '云端服务未配置，暂时无法登录'
-  if (!email.value.trim()) return '请输入邮箱'
+  const mailProblem = emailError(email.value)
+  if (mailProblem) {
+    emailTouched.value = true
+    return mailProblem
+  }
+  if (mode.value === 'forgot') return null
   if (password.value.length < 6) return '密码至少 6 位'
   if (mode.value === 'register' && password.value !== confirm.value) return '两次密码不一致'
   return null
 }
 
+async function submitReset(): Promise<void> {
+  if (cooldown.value > 0) return
+  busy.value = true
+  error.value = ''
+  try {
+    await requestPasswordReset(normalizeEmail(email.value))
+    sent.value = true
+    startCooldown()
+  } catch (e) {
+    error.value = authErrorMessage(e)
+  } finally {
+    busy.value = false
+  }
+}
+
 async function submit(): Promise<void> {
   const message = validate()
   if (message) {
-    error.value = message
+    // 邮箱问题已在输入框下方就地提示，避免同一条错误出现两次
+    error.value = emailError(email.value) ? '' : message
+    return
+  }
+  if (mode.value === 'forgot') {
+    await submitReset()
     return
   }
   busy.value = true
   error.value = ''
   try {
-    if (mode.value === 'login') await login(email.value.trim(), password.value)
-    else await register(email.value.trim(), password.value)
+    if (mode.value === 'login') await login(normalizeEmail(email.value), password.value)
+    else await register(normalizeEmail(email.value), password.value)
     password.value = ''
     confirm.value = ''
   } catch (e) {
@@ -46,56 +112,85 @@ async function submit(): Promise<void> {
   }
 }
 
-function toggle(): void {
-  mode.value = mode.value === 'login' ? 'register' : 'login'
+async function switchMode(next: Mode): Promise<void> {
+  mode.value = next
   error.value = ''
+  emailTouched.value = false
+  sent.value = false
   confirm.value = ''
+  password.value = ''
+  stopTimer()
+  cooldown.value = 0
+  await nextTick()
+  emailInput.value?.focus()
 }
 </script>
 
 <template>
   <div class="auth">
     <header class="auth-head">
-      <h3>{{ mode === 'login' ? '登录账号' : '创建账号' }}</h3>
-      <p class="hint">
-        {{ mode === 'login' ? '登录后打开你的云端简历库。' : '注册后即可把简历保存到云端，换设备不丢。' }}
-      </p>
+      <h3>{{ title }}</h3>
+      <p class="hint">{{ subtitle }}</p>
     </header>
 
-    <form class="auth-form" @submit.prevent="submit">
-      <label class="field">
-        <span class="field-label">邮箱</span>
+    <!-- 重置邮件已发送：明确下一步，避免用户停在空表单 -->
+    <div v-if="mode === 'forgot' && sent" class="sent" role="status">
+      <span class="sent-mark" aria-hidden="true"><Icon name="mail" /></span>
+      <p class="sent-title">请查收邮件</p>
+      <p class="hint">
+        如果 <b>{{ sentTo }}</b> 已注册，你会收到一封设置新密码的邮件。没收到请检查垃圾邮件；稍等几分钟再试。
+      </p>
+      <div class="sent-actions">
+        <button class="btn" type="button" :disabled="cooldown > 0 || busy" @click="submitReset">
+          {{ cooldown > 0 ? `${cooldown} 秒后可重发` : '重新发送' }}
+        </button>
+        <button class="btn btn-primary" type="button" @click="switchMode('login')">返回登录</button>
+      </div>
+      <p v-if="error" class="form-error" role="alert">{{ error }}</p>
+    </div>
+
+    <form v-else class="auth-form" novalidate @submit.prevent="submit">
+      <div class="field">
+        <label class="field-label" for="auth-email">邮箱</label>
         <input
+          id="auth-email"
+          ref="emailInput"
           v-model="email"
           type="email"
           inputmode="email"
           autocomplete="email"
           placeholder="you@example.com"
-          required
+          :aria-invalid="!!emailFieldError"
+          :aria-describedby="emailFieldError ? 'auth-email-error' : undefined"
+          @blur="emailTouched = true"
         />
-      </label>
+        <p v-if="emailFieldError" id="auth-email-error" class="field-error">{{ emailFieldError }}</p>
+      </div>
 
-      <label class="field">
-        <span class="field-label">密码</span>
+      <div v-if="mode !== 'forgot'" class="field">
+        <label class="field-label" for="auth-password">密码</label>
         <input
+          id="auth-password"
           v-model="password"
           type="password"
           :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
           placeholder="至少 6 位"
-          required
         />
-      </label>
+        <button v-if="mode === 'login'" class="forgot-link link-btn" type="button" @click="switchMode('forgot')">
+          忘记密码？
+        </button>
+      </div>
 
-      <label v-if="mode === 'register'" class="field">
-        <span class="field-label">确认密码</span>
+      <div v-if="mode === 'register'" class="field">
+        <label class="field-label" for="auth-confirm">确认密码</label>
         <input
+          id="auth-confirm"
           v-model="confirm"
           type="password"
           autocomplete="new-password"
           placeholder="再输入一次"
-          required
         />
-      </label>
+      </div>
 
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
 
@@ -104,11 +199,18 @@ function toggle(): void {
       </button>
     </form>
 
-    <p class="switch-hint">
-      {{ mode === 'login' ? '还没有账号？' : '已经有账号？' }}
-      <button class="link-btn" type="button" @click="toggle">
-        {{ mode === 'login' ? '注册' : '登录' }}
-      </button>
+    <p v-if="!(mode === 'forgot' && sent)" class="switch-hint">
+      <template v-if="mode === 'forgot'">
+        <button class="link-btn" type="button" @click="switchMode('login')">返回登录</button>
+      </template>
+      <template v-else-if="mode === 'login'">
+        还没有账号？
+        <button class="link-btn" type="button" @click="switchMode('register')">注册</button>
+      </template>
+      <template v-else>
+        已经有账号？
+        <button class="link-btn" type="button" @click="switchMode('login')">登录</button>
+      </template>
     </p>
 
     <p v-if="!account.available" class="notice">
@@ -124,7 +226,7 @@ function toggle(): void {
 .auth-head .hint { margin: 0; }
 
 .auth-form { display: flex; flex-direction: column; gap: 12px; }
-.field { display: flex; flex-direction: column; gap: 6px; }
+.field { position: relative; display: flex; flex-direction: column; gap: 6px; }
 .field-label { color: var(--muted); font-size: 12px; font-weight: 500; }
 input {
   height: 46px;
@@ -137,7 +239,34 @@ input {
   transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
 }
 input:focus { border-color: var(--accent); box-shadow: var(--ring); }
+input[aria-invalid='true'] { border-color: var(--danger); }
+input[aria-invalid='true']:focus { box-shadow: 0 0 0 3.5px rgba(255, 59, 48, 0.18); }
+.field-error { margin: 0; color: var(--danger); font-size: 12.5px; line-height: 1.5; }
 .form-error { margin: 0; color: var(--danger); font-size: 13px; line-height: 1.5; }
+
+.forgot-link {
+  position: absolute;
+  top: -2px;
+  right: 0;
+  font-size: 12.5px;
+}
+
+.sent { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.sent-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(0, 113, 227, 0.1);
+  color: var(--accent);
+}
+.sent-mark svg { width: 21px; height: 21px; }
+.sent-title { margin: 2px 0 0; font-size: 16px; font-weight: 600; }
+.sent .hint { margin: 0; }
+.sent .hint b { color: var(--ink); font-weight: 550; word-break: break-all; }
+.sent-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 
 .switch-hint { margin: 0; text-align: center; color: var(--muted); font-size: 13px; }
 .link-btn {

@@ -18,3 +18,11 @@ export function authErrorMessage(e: unknown): string {
   if (name === 'AuthRetryableFetchError' || e instanceof TypeError || status === 0) return '网络异常，请稍后重试'
   return '操作失败，请稍后重试'
 }
+
+/** 换绑邮箱：自有邮箱、同邮箱与频率限制需要与登录注册区分开 */
+export function emailChangeErrorMessage(e: unknown): string {
+  const code = (e as { code?: unknown } | null)?.code
+  if (code === 'email_exists' || code === 'user_already_exists') return '该邮箱已被其他账号使用'
+  if (code === 'same_email') return '新邮箱与当前邮箱相同'
+  return authErrorMessage(e)
+}

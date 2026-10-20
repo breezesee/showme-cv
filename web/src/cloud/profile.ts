@@ -4,6 +4,8 @@ export const MAX_DISPLAY_NAME = 40
 
 export interface UserProfile {
   displayName: string
+  /** Storage 对象路径；未上传时为空串 */
+  avatarPath: string
   updatedAt: string
 }
 
@@ -27,12 +29,16 @@ export function displayInitial(name: string, email = ''): string {
 export async function fetchProfile(client: SupabaseClient, userId: string): Promise<UserProfile | null> {
   const { data, error } = await client
     .from('profiles')
-    .select('display_name, updated_at')
+    .select('display_name, avatar_path, updated_at')
     .eq('id', userId)
     .maybeSingle()
   if (error) throw error
   if (!data) return null
-  return { displayName: String(data.display_name ?? '').trim(), updatedAt: data.updated_at as string }
+  return {
+    displayName: String(data.display_name ?? '').trim(),
+    avatarPath: typeof data.avatar_path === 'string' ? data.avatar_path : '',
+    updatedAt: data.updated_at as string,
+  }
 }
 
 export async function saveProfile(
@@ -45,8 +51,24 @@ export async function saveProfile(
   const { data, error } = await client
     .from('profiles')
     .upsert({ id: userId, display_name: displayName }, { onConflict: 'id' })
-    .select('display_name, updated_at')
+    .select('display_name, avatar_path, updated_at')
     .single()
   if (error) throw error
-  return { displayName: data.display_name as string, updatedAt: data.updated_at as string }
+  return {
+    displayName: data.display_name as string,
+    avatarPath: typeof data.avatar_path === 'string' ? data.avatar_path : '',
+    updatedAt: data.updated_at as string,
+  }
+}
+
+/** 保存头像路径；传 null 表示恢复默认首字头像 */
+export async function saveAvatarPath(
+  client: SupabaseClient,
+  userId: string,
+  path: string | null,
+): Promise<void> {
+  const { error } = await client
+    .from('profiles')
+    .upsert({ id: userId, avatar_path: path }, { onConflict: 'id' })
+  if (error) throw error
 }

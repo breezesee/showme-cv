@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue'
-import { displayInitial } from '../cloud/profile'
+import { computed } from 'vue'
 import type { ResumeMeta } from '../cloud/library'
 import { useResume } from '../store/useResume'
 import { showToast } from '../ui/toast'
 import AuthForm from './AuthForm.vue'
 import Icon from './Icon.vue'
+import ProfileCard from './ProfileCard.vue'
+import SupportCard from './SupportCard.vue'
 
 /** 个人中心：未登录显示登录表单；已登录显示资料、简历库与退出登录 */
 const emit = defineEmits<{ 'open-editor': [] }>()
@@ -25,17 +26,7 @@ const {
   deleteLibraryDoc,
   refreshLibrary,
   logout,
-  saveProfileName,
 } = useResume()
-
-const initial = computed(() => displayInitial(account.displayName, account.email))
-
-const joined = computed(() => {
-  if (!account.createdAt) return ''
-  const d = new Date(account.createdAt)
-  if (Number.isNaN(d.getTime())) return ''
-  return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月加入`
-})
 
 const savedText = computed(() => {
   if (dirty.value) return '有未保存的修改'
@@ -44,42 +35,6 @@ const savedText = computed(() => {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `已保存 ${pad(d.getHours())}:${pad(d.getMinutes())}`
 })
-
-// ---------- 昵称 ----------
-const editing = ref(false)
-const nameDraft = ref('')
-const savingName = ref(false)
-const profileError = ref('')
-const nameInput = ref<HTMLInputElement>()
-
-async function startEdit(): Promise<void> {
-  nameDraft.value = account.displayName
-  editing.value = true
-  profileError.value = ''
-  await nextTick()
-  nameInput.value?.focus()
-  nameInput.value?.select()
-}
-
-function cancelEdit(): void {
-  editing.value = false
-  profileError.value = ''
-}
-
-async function submitName(): Promise<void> {
-  if (savingName.value) return
-  savingName.value = true
-  profileError.value = ''
-  try {
-    await saveProfileName(nameDraft.value)
-    editing.value = false
-    showToast('昵称已更新', 'success')
-  } catch (e) {
-    profileError.value = e instanceof Error ? e.message : '资料保存失败，请稍后重试'
-  } finally {
-    savingName.value = false
-  }
-}
 
 // ---------- 简历库 ----------
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -120,7 +75,6 @@ async function doLogout(): Promise<void> {
   <div class="account">
     <!-- 云服务未配置：说明情况，本地能力不受影响 -->
     <section v-if="!account.available" class="card panel state">
-      <div class="intro-mark" aria-hidden="true"><Icon name="user" /></div>
       <h2>云端功能暂未启用</h2>
       <p class="hint">当前站点没有配置云服务，登录与简历库不可用。编辑、保存到本机、导出与分享都不受影响。</p>
     </section>
@@ -130,19 +84,11 @@ async function doLogout(): Promise<void> {
       <p class="hint">正在恢复登录状态…</p>
     </section>
 
-    <!-- 未登录：价值说明 + 登录注册 -->
+    <!-- 未登录：一句价值说明 + 登录注册 -->
     <template v-else-if="!account.ready">
       <section class="card panel intro">
-        <div class="intro-mark" aria-hidden="true"><Icon name="user" /></div>
         <h2>登录后，简历跟着你走</h2>
-        <p class="hint">
-          保存多份简历到云端简历库，换电脑、换手机都能接着改；未登录时仍可保存在当前浏览器。
-        </p>
-        <ul class="benefits">
-          <li><Icon name="check" />多份简历分开放，不同岗位随时切换</li>
-          <li><Icon name="check" />云端保存，换设备登录即可继续编辑</li>
-          <li><Icon name="check" />导出、分享与备份能力完全保留</li>
-        </ul>
+        <p class="hint">云端保存多份简历，换设备接着改；不登录也能保存在当前浏览器。</p>
       </section>
 
       <section class="card panel">
@@ -152,31 +98,7 @@ async function doLogout(): Promise<void> {
 
     <!-- 已登录：资料 + 简历库 + 账号操作 -->
     <template v-else>
-      <section class="card panel profile">
-        <div class="avatar" aria-hidden="true">{{ initial }}</div>
-        <div class="profile-main">
-          <div v-if="!editing" class="name-row">
-            <strong class="display-name">{{ account.displayName }}</strong>
-            <button class="link-btn" type="button" @click="startEdit">编辑资料</button>
-          </div>
-          <form v-else class="name-form" @submit.prevent="submitName">
-            <input
-              ref="nameInput"
-              v-model="nameDraft"
-              maxlength="40"
-              aria-label="昵称"
-              placeholder="给自己起个昵称"
-            />
-            <button class="btn btn-primary" type="submit" :disabled="savingName">
-              {{ savingName ? '保存中…' : '保存' }}
-            </button>
-            <button class="btn" type="button" @click="cancelEdit">取消</button>
-          </form>
-          <p v-if="profileError" class="form-error" role="alert">{{ profileError }}</p>
-          <p class="email">{{ account.email }}</p>
-          <p v-if="joined" class="hint joined">{{ joined }}</p>
-        </div>
-      </section>
+      <ProfileCard />
 
       <section class="card panel">
         <header class="panel-head">
@@ -231,15 +153,17 @@ async function doLogout(): Promise<void> {
           当前编辑：<b>{{ docName || '未命名草稿' }}</b> · {{ savedText }}
         </p>
       </section>
-
-      <section class="card panel session">
-        <div>
-          <p class="session-title">账号</p>
-          <p class="hint">退出后本机缓存仍保留，云端简历库不会被删除。</p>
-        </div>
-        <button class="btn btn-danger" type="button" @click="doLogout">退出登录</button>
-      </section>
     </template>
+
+    <SupportCard />
+
+    <section v-if="account.ready" class="card panel session">
+      <div>
+        <p class="session-title">账号</p>
+        <p class="hint">退出后本机缓存仍保留，云端简历库不会被删除。</p>
+      </div>
+      <button class="btn btn-danger" type="button" @click="doLogout">退出登录</button>
+    </section>
   </div>
 </template>
 
@@ -247,62 +171,13 @@ async function doLogout(): Promise<void> {
 .account { display: flex; flex-direction: column; gap: 14px; }
 .panel { padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
 
-/* 未登录 */
-.intro { align-items: flex-start; }
+/* 状态与未登录 */
 .state { align-items: flex-start; }
-.state h2 { margin: 0; font-size: 20px; font-weight: 700; }
+.state h2 { margin: 0; font-size: 19px; font-weight: 650; }
 .state .hint { margin: 0; }
-.intro-mark {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
-  background: rgba(0, 113, 227, 0.1);
-  color: var(--accent);
-}
-.intro-mark svg { width: 24px; height: 24px; }
-.intro h2 { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: 0.2px; }
+.intro { gap: 6px; }
+.intro h2 { margin: 0; font-size: 19px; font-weight: 650; letter-spacing: 0.2px; }
 .intro .hint { margin: 0; }
-.benefits { display: flex; flex-direction: column; gap: 8px; margin: 2px 0 0; padding: 0; list-style: none; }
-.benefits li { display: flex; align-items: flex-start; gap: 8px; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
-.benefits svg { width: 16px; height: 16px; margin-top: 1px; color: var(--success); flex: none; }
-
-/* 资料 */
-.profile { flex-direction: row; align-items: flex-start; gap: 14px; }
-.avatar {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: rgba(0, 113, 227, 0.12);
-  color: var(--accent);
-  font-size: 20px;
-  font-weight: 700;
-}
-.profile-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.name-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.display-name { font-size: 18px; font-weight: 650; word-break: break-all; }
-.name-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.name-form input {
-  flex: 1 1 160px;
-  min-width: 0;
-  height: 38px;
-  padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  font-size: 15px;
-  outline: none;
-}
-.name-form input:focus { border-color: var(--accent); box-shadow: var(--ring); }
-.email { margin: 0; color: var(--muted); font-size: 13px; word-break: break-all; }
-.joined { margin: 0; }
-.form-error { margin: 2px 0 0; color: var(--danger); font-size: 13px; }
 
 /* 简历库 */
 .panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }

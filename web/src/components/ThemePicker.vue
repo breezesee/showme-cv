@@ -136,7 +136,11 @@ function onKeydown(e: KeyboardEvent): void {
   font-weight: 600;
 }
 @media (max-width: 1099.98px) {
-  .themes { gap: 2px 8px; }
-  .mini { padding: 4px 6px; }
+  .themes {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px 4px;
+  }
+  .mini { padding: 4px; }
 }
 </style>

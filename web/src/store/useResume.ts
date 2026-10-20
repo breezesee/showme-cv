@@ -1,12 +1,15 @@
 import { computed, ref, watch } from 'vue'
 import {
   account,
+  completePasswordReset as applyPasswordReset,
   initAccount,
   signInAccount,
   signOutAccount,
   signUpAccount,
   updateDisplayName,
+  type SessionInfo,
 } from '../cloud/account'
+import type { AuthCallback } from '../cloud/authCallback'
 import { getClient } from '../cloud/client'
 import {
   createSupabaseLibrary,
@@ -61,6 +64,10 @@ const library = ref<ResumeMeta[]>([])
 const libraryLoading = ref(false)
 const libraryError = ref('')
 const openingId = ref('')
+
+/** 邮件里的重置密码链接：打开全屏设置新密码；失败时保留错误原因 */
+const recoveryActive = ref(false)
+const recoveryError = ref('')
 
 /** 有未保存修改：内容与基线不同 */
 const dirty = computed(() => !sameResume(resume.value, baseline.value))
@@ -340,6 +347,34 @@ export async function saveProfileName(rawName: string): Promise<void> {
   }
 }
 
+function handleAuthCallback(callback: AuthCallback, session: SessionInfo | null): void {
+  if (callback.kind === 'recovery') {
+    recoveryActive.value = true
+    if (!session) recoveryError.value = '链接已失效'
+  } else if (callback.kind === 'error' && callback.flow === 'recovery') {
+    recoveryActive.value = true
+    recoveryError.value = callback.description
+  } else if (callback.kind === 'email_change') {
+    showToast(session ? '邮箱已更新' : '邮箱变更已确认，请重新登录', 'success', 4500)
+  } else if (callback.kind === 'error' && callback.flow === 'email-change') {
+    showToast(`邮箱更换失败：${callback.description}`, 'error', 6000)
+  }
+}
+
+/** 在找回会话里设置新密码 */
+export async function submitNewPassword(password: string): Promise<void> {
+  await applyPasswordReset(password)
+  recoveryActive.value = false
+  recoveryError.value = ''
+  showToast('密码已更新，其他设备需要重新登录', 'success', 5000)
+}
+
+/** 关闭找回面板（链接失效时用户也可以先去登录） */
+export function finishRecovery(): void {
+  recoveryActive.value = false
+  recoveryError.value = ''
+}
+
 /** 导入 / 接力导入 / 收到简历时替换工作副本：作为新的未保存文档，避免覆盖库内已有条目 */
 export function replaceResume(next: Resume): void {
   resume.value = normalizeResume(next)
@@ -364,7 +399,8 @@ if (typeof window !== 'undefined') {
   // 启动时恢复已登录会话；已有云端简历则打开最近更新的一份
   if (account.available) {
     void (async () => {
-      const session = await initAccount()
+      const { session, callback } = await initAccount()
+      handleAuthCallback(callback, session)
       if (session) await synchronizeAfterLogin(true, true)
     })()
   }
@@ -398,6 +434,10 @@ export function useResume() {
     register,
     logout,
     saveProfileName,
+    recoveryActive,
+    recoveryError,
+    submitNewPassword,
+    finishRecovery,
     replaceResume,
   }
 }

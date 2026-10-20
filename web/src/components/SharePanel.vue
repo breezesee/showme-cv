@@ -283,11 +283,11 @@ async function runExport(kind: ExportKind): Promise<void> {
       </p>
     </section>
 
-    <!-- 导入：从备份恢复 -->
+    <!-- 备份与恢复：从 JSON 备份导入 -->
     <section class="card block">
       <header class="zone-head">
-        <h3>导入</h3>
-        <p class="hint">从备份文件（JSON）恢复简历。导入后会成为一份未保存的草稿，确认内容后点击「保存」。</p>
+        <h3>备份与恢复</h3>
+        <p class="hint">从 JSON 备份恢复简历。导入后会成为一份未保存的草稿，确认内容后点击「保存」。</p>
       </header>
       <div class="actions">
         <button class="btn" type="button" @click="importFromFile"><Icon name="upload" />导入备份</button>

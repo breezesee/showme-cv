@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import AccountPanel from './components/AccountPanel.vue'
+import AvatarBadge from './components/AvatarBadge.vue'
 import ConfirmHost from './components/ConfirmHost.vue'
 import ReceivedView from './components/ReceivedView.vue'
+import RecoveryScreen from './components/RecoveryScreen.vue'
 import ResumeEditor from './components/ResumeEditor.vue'
 import SaveResumeForm from './components/SaveResumeForm.vue'
 import SectionManager from './components/SectionManager.vue'
@@ -15,11 +17,12 @@ import ThemePicker from './components/ThemePicker.vue'
 import ToastHost from './components/ToastHost.vue'
 import VersionFooter from './components/VersionFooter.vue'
 import Icon, { type IconName } from './components/Icon.vue'
-import { displayInitial } from './cloud/profile'
 import { CloudRelayError, fetchShortLink } from './relay/cloud'
 import { parseRelayHash, type RelayPayload } from './relay/link'
 import { useResume } from './store/useResume'
-import { exportCurrent, exportPdf, importFromFile } from './ui/actions'
+import { TEMPLATES } from './templates/catalog'
+import { THEMES } from './templates/themes'
+import { exportPdf } from './ui/actions'
 import { showToast } from './ui/toast'
 import { useMediaQuery } from './ui/useMediaQuery'
 
@@ -30,8 +33,8 @@ const logo = `${import.meta.env.BASE_URL}icons/icon.svg`
 type Tab = 'edit' | 'preview' | 'account'
 const TABS: { id: Tab; label: string; title: string; icon: IconName }[] = [
   { id: 'edit', label: '编辑', title: '我的简历', icon: 'edit' },
-  { id: 'preview', label: '预览', title: '预览', icon: 'eye' },
-  { id: 'account', label: '我的', title: '我的', icon: 'user' },
+  { id: 'preview', label: '预览', title: '预览效果', icon: 'eye' },
+  { id: 'account', label: '我的', title: '账号与资料', icon: 'user' },
 ]
 const tab = ref<Tab>('edit')
 const tabTitle = computed(() => TABS.find((t) => t.id === tab.value)!.title)
@@ -39,10 +42,15 @@ const shareOpen = ref(false)
 const saveOpen = ref(false)
 const accountOpen = ref(false)
 const sectionsOpen = ref(false)
+const appearanceOpen = ref(false)
 
 /** 当前工作副本的名称与保存状态（顶栏胶囊） */
 const docLabel = computed(() => docName.value || '未命名草稿')
-const accountInitial = computed(() => displayInitial(account.displayName, account.email))
+const lookSummary = computed(() => {
+  const template = TEMPLATES.find((t) => t.id === templateId.value)?.name ?? ''
+  const theme = THEMES.find((t) => t.id === themeId.value)?.name ?? ''
+  return [template, theme].filter(Boolean).join(' · ')
+})
 const savedHint = computed(() => {
   if (dirty.value) return '有未保存的修改'
   if (!savedAt.value) return '尚未保存'
@@ -115,6 +123,19 @@ function openSave(): void {
   saveOpen.value = true
 }
 
+/** 从外观抽屉进入板块管理：先关外层，避免两层弹层叠在一起 */
+function openSectionsFromAppearance(): void {
+  appearanceOpen.value = false
+  void nextTick(() => { sectionsOpen.value = true })
+}
+
+/** 找回面板关闭：未登录时把用户带到账号页，方便重新登录或再发邮件 */
+function onRecoveryClose(): void {
+  if (account.ready) return
+  if (isWide.value) accountOpen.value = true
+  else selectTab('account')
+}
+
 /** 直出 PDF（与预览一致）；打印版入口保留在分享页的导出区 */
 const exportingPdf = ref(false)
 async function runExportPdf(): Promise<void> {
@@ -164,11 +185,9 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
       </div>
 
       <div class="tools">
-        <button class="btn btn-plain" type="button" @click="importFromFile"><Icon name="upload" />导入备份</button>
-        <button class="btn btn-plain" type="button" @click="exportCurrent"><Icon name="download" />导出备份</button>
-        <button class="btn" type="button" @click="shareOpen = true"><Icon name="share" />分享</button>
-        <button class="btn btn-primary" type="button" @click="openSave"><Icon name="save" />保存</button>
+        <button class="btn" type="button" @click="shareOpen = true"><Icon name="share" />分享与导出</button>
         <button class="btn" type="button" :disabled="exportingPdf" @click="runExportPdf"><Icon name="download" />{{ exportingPdf ? '导出中…' : '导出 PDF' }}</button>
+        <button class="btn btn-primary" type="button" @click="openSave"><Icon name="save" />保存</button>
       </div>
 
       <!-- 账号入口固定在最右侧：未登录是「登录 / 注册」，登录后是头像胶囊 -->
@@ -181,7 +200,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
           :title="`${account.displayName}（${account.email}）`"
           @click="accountOpen = true"
         >
-          <span class="avatar" aria-hidden="true">{{ accountInitial }}</span>
+          <AvatarBadge :path="account.avatarPath" :name="account.displayName" :email="account.email" :size="28" />
           <span class="account-name">{{ account.displayName }}</span>
         </button>
         <button v-else class="btn btn-login" type="button" @click="accountOpen = true">
@@ -214,7 +233,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
     <Sheet v-model:open="saveOpen" title="保存简历">
       <SaveResumeForm v-if="saveOpen" @done="saveOpen = false" @cancel="saveOpen = false" />
     </Sheet>
-    <Sheet v-model:open="shareOpen" title="分享与备份"><SharePanel /></Sheet>
+    <Sheet v-model:open="shareOpen" title="分享与导出"><SharePanel /></Sheet>
     <Sheet v-model:open="sectionsOpen" title="板块与顺序"><SectionManager v-if="sectionsOpen" /></Sheet>
     <Sheet v-model:open="accountOpen" title="个人中心">
       <AccountPanel v-if="accountOpen" @open-editor="editFromAccount" />
@@ -236,25 +255,15 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
     <main class="narrow-body">
       <ResumeEditor v-show="tab === 'edit'" class="pane" @need-login="accountOpen = true" />
       <div v-show="tab === 'preview'" class="preview-page">
-        <div class="look-group">
-          <span class="look-label">模板</span>
-          <TemplatePicker v-model="templateId" />
-        </div>
-        <div class="look-group">
-          <span class="look-label">主题</span>
-          <ThemePicker v-model="themeId" />
-        </div>
-        <div class="look-group">
-          <span class="look-label">板块</span>
-          <button class="look-btn" type="button" @click="sectionsOpen = true"><Icon name="layers" />排序与显隐</button>
-        </div>
+        <button class="look-btn mobile-look" type="button" @click="appearanceOpen = true">
+          <Icon name="layers" />
+          <span class="look-summary">外观：{{ lookSummary }}</span>
+          <Icon name="chevron" class="look-chevron" />
+        </button>
         <TemplatePreview :resume="resume" :template-id="templateId" :theme-id="themeId" />
         <div class="preview-actions">
-          <button class="btn btn-block" type="button" @click="shareOpen = true">
+          <button class="btn btn-primary btn-block" type="button" @click="shareOpen = true">
             <Icon name="share" />分享与导出
-          </button>
-          <button class="btn btn-primary btn-block" type="button" :disabled="exportingPdf" @click="runExportPdf">
-            <Icon name="download" />{{ exportingPdf ? '导出中…' : '导出 PDF' }}
           </button>
         </div>
       </div>
@@ -282,8 +291,25 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
     </Sheet>
     <Sheet v-model:open="shareOpen" title="分享与导出"><SharePanel /></Sheet>
     <Sheet v-model:open="sectionsOpen" title="板块与顺序"><SectionManager v-if="sectionsOpen" /></Sheet>
+    <Sheet v-model:open="appearanceOpen" title="外观">
+      <div class="appearance">
+        <div class="appearance-group">
+          <span class="look-label">模板</span>
+          <TemplatePicker v-model="templateId" />
+        </div>
+        <div class="appearance-group">
+          <span class="look-label">主题</span>
+          <ThemePicker v-model="themeId" />
+        </div>
+        <div class="appearance-group">
+          <span class="look-label">板块</span>
+          <button class="look-btn" type="button" @click="openSectionsFromAppearance"><Icon name="layers" />排序与显隐</button>
+        </div>
+      </div>
+    </Sheet>
   </div>
 
+  <RecoveryScreen @close="onRecoveryClose" />
   <ConfirmHost />
   <ToastHost />
 </template>
@@ -342,19 +368,6 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
 }
 .account-chip:hover { background: var(--fill-strong); }
 .account-chip:active { transform: scale(0.98); }
-.avatar {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 700;
-}
 .account-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* 空间不足时优先收起文档名与账号昵称，保留所有操作 */
@@ -441,6 +454,32 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
 }
 .preview-page { display: flex; flex-direction: column; gap: 16px; }
 .preview-actions { display: flex; flex-direction: column; gap: 10px; }
+
+/* 移动端外观入口：一行设置项，替代原来的三组控件 */
+.mobile-look {
+  width: 100%;
+  min-height: 48px;
+  justify-content: flex-start;
+  padding: 0 14px;
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+.mobile-look > svg:first-child { color: var(--muted); }
+.look-summary {
+  flex: 1;
+  min-width: 0;
+  margin-left: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.look-chevron { flex: none; width: 16px; height: 16px; color: var(--disabled); }
+.appearance { display: flex; flex-direction: column; gap: 22px; }
+.appearance-group { display: flex; flex-direction: column; gap: 8px; }
+.appearance-group .look-label { font-size: 13px; }
+
 /* 单列布局（窄屏与平板）：编辑 / 分享表单限宽居中，预览保持满宽 */
 @media (min-width: 600px) {
   .pane { max-width: 640px; margin-inline: auto; }

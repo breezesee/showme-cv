@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { authErrorMessage } from './authErrors'
+import { authErrorMessage, emailChangeErrorMessage } from './authErrors'
 
 const err = (code: string, extra: Record<string, unknown> = {}) => Object.assign(new Error(code), { code, ...extra })
 
@@ -28,5 +28,19 @@ describe('authErrorMessage', () => {
     expect(authErrorMessage(err('something_new'))).toBe('操作失败，请稍后重试')
     expect(authErrorMessage('boom')).toBe('操作失败，请稍后重试')
     expect(authErrorMessage(null)).toBe('操作失败，请稍后重试')
+  })
+})
+
+describe('emailChangeErrorMessage', () => {
+  it('换绑失败给出针对性提示', () => {
+    expect(emailChangeErrorMessage(err('email_exists'))).toBe('该邮箱已被其他账号使用')
+    expect(emailChangeErrorMessage(err('user_already_exists'))).toBe('该邮箱已被其他账号使用')
+    expect(emailChangeErrorMessage(err('same_email'))).toBe('新邮箱与当前邮箱相同')
+    expect(emailChangeErrorMessage(err('over_email_send_rate_limit'))).toBe('操作太频繁，请稍后再试')
+  })
+
+  it('其余情况回退到通用映射', () => {
+    expect(emailChangeErrorMessage(new TypeError('Failed to fetch'))).toBe('网络异常，请稍后重试')
+    expect(emailChangeErrorMessage(err('something_new'))).toBe('操作失败，请稍后重试')
   })
 })

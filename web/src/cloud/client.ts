@@ -1,3 +1,4 @@
+import { avatarUrl } from '../model/avatar'
 import { photoUrl } from '../model/photo'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? ''
@@ -11,6 +12,11 @@ export function cloudConfigured(): boolean {
 /** 照片公开 URL：每次读取当前环境，便于测试替换部署地址 */
 export function photoPublicUrl(path: string): string {
   return photoUrl(import.meta.env.VITE_SUPABASE_URL ?? '', path)
+}
+
+/** 头像公开 URL */
+export function avatarPublicUrl(path: string): string {
+  return avatarUrl(import.meta.env.VITE_SUPABASE_URL ?? '', path)
 }
 
 export function hasStoredSession(): boolean {

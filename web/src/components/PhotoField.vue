@@ -24,9 +24,9 @@ watch(photo, () => {
 const note = computed(() => {
   if (!account.available) return '云服务未配置，照片功能暂不可用'
   if (account.restoring) return '正在恢复登录状态…'
-  if (!account.ready) return '登录后可上传；照片保存在云端，不随 JSON 备份导出'
+  if (!account.ready) return '登录后可上传，不随 JSON 备份导出'
   if (busy.value) return '正在处理照片…'
-  return '支持 JPG / PNG / WebP，不超过 10MB；会裁成 5:7 并压缩'
+  return 'JPG / PNG / WebP，不超过 10MB，裁成 5:7'
 })
 
 const disabled = computed(() => !account.available || busy.value || account.restoring)
@@ -101,44 +101,44 @@ function remove(): void {
 </template>
 
 <style scoped>
-.photo-field { display: flex; flex-direction: column; gap: 10px; }
+.photo-field { display: flex; flex-direction: column; gap: 8px; }
 .photo-head { display: flex; align-items: baseline; gap: 8px; padding-left: 4px; }
 .photo-title { font-size: 13px; color: var(--muted); }
 .photo-optional { font-size: 12px; color: var(--disabled); }
-.photo-row { display: flex; align-items: center; gap: 14px; }
+.photo-row { display: flex; align-items: center; gap: 12px; }
 .photo-frame {
   flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 88px;
-  height: 123px;
-  border-radius: 10px;
+  width: 56px;
+  height: 78px;
+  border-radius: 8px;
   background: var(--bg);
   overflow: hidden;
 }
 .photo-frame.empty { border: 1px dashed var(--line); color: var(--disabled); }
 .photo-frame img { width: 100%; height: 100%; object-fit: cover; }
-.photo-frame svg { width: 30px; height: 30px; }
-.photo-actions { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
-.photo-buttons { display: flex; align-items: center; gap: 8px; }
+.photo-frame svg { width: 22px; height: 22px; }
+.photo-actions { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.photo-buttons { display: flex; align-items: center; gap: 4px; }
 .upload, .remove {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-height: 38px;
-  padding: 0 12px;
+  min-height: 32px;
+  padding: 0 10px;
   border: none;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 550;
   cursor: pointer;
 }
 .upload { background: var(--fill); color: var(--accent); }
-.upload svg { width: 15px; height: 15px; }
+.upload svg { width: 14px; height: 14px; }
 .upload:disabled { opacity: 0.5; cursor: default; }
 .remove { background: transparent; color: var(--danger); }
 .remove:disabled { opacity: 0.5; cursor: default; }
-.note { margin: 0; font-size: 12px; line-height: 1.55; color: var(--muted); }
+.note { margin: 0; font-size: 12px; line-height: 1.45; color: var(--muted); }
 .file-input { display: none; }
 </style>
