@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { defaultLayout } from './layout'
 import { normalizeResume, parseResumeJson, ResumeFormatError, sameResume } from './normalize'
-import { emptyResume, sampleResume } from './resume'
+import { emptyResume, isResumeEmpty, sampleResume } from './resume'
+
+const UID = '3f0e8f7a-1111-4c2b-9d3e-1234567890ab'
+const PHOTO_ID = 'a1b2c3d4-2222-4e5f-8a9b-abcdefabcdef'
 
 describe('normalizeResume', () => {
   it('合法数据原样保留', () => {
@@ -58,5 +62,98 @@ describe('parseResumeJson / sameResume', () => {
     const b = sampleResume()
     b.basics.name = '王五'
     expect(sameResume(sampleResume(), b)).toBe(false)
+  })
+})
+
+describe('附加项、自定义模块、布局与照片', () => {
+  it('旧数据补齐默认值', () => {
+    const r = normalizeResume({ basics: { name: '张三' } })
+    expect(r.basics.extras).toEqual([])
+    expect(r.basics.photo).toBe('')
+    expect(r.custom).toEqual([])
+    expect(r.layout).toEqual(defaultLayout([]))
+  })
+
+  it('附加项保留有内容的项，丢弃空值项', () => {
+    const r = normalizeResume({
+      basics: {
+        extras: [
+          { label: '微信', value: 'showme' },
+          { label: '空', value: '  ' },
+          { label: '', value: 'https://example.com' },
+        ],
+      },
+    })
+    expect(r.basics.extras).toEqual([
+      { label: '微信', value: 'showme' },
+      { label: '', value: 'https://example.com' },
+    ])
+  })
+
+  it('附加项类型错误仍判为非法', () => {
+    expect(() => normalizeResume({ basics: { extras: 'x' } })).toThrow(/extras/)
+    expect(() => normalizeResume({ basics: { extras: [{ label: 1, value: 'x' }] } })).toThrow(/label/)
+  })
+
+  it('照片只接受 Storage 路径，完整 URL 或非法路径置空', () => {
+    const path = `${UID}/${PHOTO_ID}.jpg`
+    expect(normalizeResume({ basics: { photo: path } }).basics.photo).toBe(path)
+    expect(normalizeResume({ basics: { photo: `https://x/${path}` } }).basics.photo).toBe('')
+    expect(normalizeResume({ basics: { photo: '../x.jpg' } }).basics.photo).toBe('')
+    expect(() => normalizeResume({ basics: { photo: 1 } })).toThrow(/photo/)
+  })
+
+  it('自定义模块生成稳定 id、去重并丢弃空模块', () => {
+    const input = {
+      custom: [
+        { title: '荣誉', body: '- 一等奖' },
+        { id: 'awards', title: '证书', body: 'PMP' },
+        { id: 'awards', title: '重复 id', body: 'CET-6' },
+        { title: ' ', body: ' ' },
+      ],
+    }
+    const first = normalizeResume(input)
+    expect(first.custom.map((c) => c.id)).toEqual(['c1', 'awards', 'c2'])
+    expect(first.custom).toHaveLength(3)
+    // 再次 normalize 不应产生不同的 id（否则会永远显示未保存）
+    expect(normalizeResume(first).custom).toEqual(first.custom)
+  })
+
+  it('布局非法时回到默认而不阻塞导入', () => {
+    const r = normalizeResume({ basics: { name: '张三' }, layout: { order: 'x', hidden: 1 } })
+    expect(r.layout).toEqual(defaultLayout([]))
+  })
+
+  it('布局过滤未知 id，并保留自定义模块', () => {
+    const r = normalizeResume({
+      custom: [{ id: 'awards', title: '荣誉', body: '一等奖' }],
+      layout: { order: ['work', 'custom:awards', 'custom:missing'], hidden: ['custom:awards', 'nope'] },
+    })
+    expect(r.layout.order).toContain('custom:awards')
+    expect(r.layout.order).not.toContain('custom:missing')
+    expect(r.layout.hidden).toEqual(['custom:awards'])
+  })
+
+  it('附加项、自定义模块与布局参与内容比较', () => {
+    const base = normalizeResume({ basics: { name: '张三' } })
+    const withExtra = normalizeResume({ ...base, basics: { ...base.basics, extras: [{ label: '微信', value: 'x' }] } })
+    expect(sameResume(base, withExtra)).toBe(false)
+    const moved = normalizeResume({ ...base, layout: { ...base.layout, order: ['work', 'education', 'projects', 'skills', 'summary'] } })
+    expect(sameResume(base, moved)).toBe(false)
+  })
+
+  it('空简历判断：照片和布局不算内容，附加项与自定义正文算内容', () => {
+    const blank = emptyResume()
+    expect(isResumeEmpty(blank)).toBe(true)
+    expect(isResumeEmpty({ ...blank, basics: { ...blank.basics, photo: `${UID}/${PHOTO_ID}.jpg` } })).toBe(true)
+
+    const withExtra = normalizeResume({ basics: { extras: [{ label: '微信', value: 'x' }] } })
+    expect(isResumeEmpty(withExtra)).toBe(false)
+
+    const withCustom = normalizeResume({ custom: [{ title: '荣誉', body: '一等奖' }] })
+    expect(isResumeEmpty(withCustom)).toBe(false)
+
+    const titleOnly = normalizeResume({ custom: [{ title: '荣誉', body: '' }] })
+    expect(isResumeEmpty(titleOnly)).toBe(true)
   })
 })

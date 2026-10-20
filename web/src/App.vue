@@ -5,6 +5,7 @@ import ConfirmHost from './components/ConfirmHost.vue'
 import ReceivedView from './components/ReceivedView.vue'
 import ResumeEditor from './components/ResumeEditor.vue'
 import SaveResumeForm from './components/SaveResumeForm.vue'
+import SectionManager from './components/SectionManager.vue'
 import SharePanel from './components/SharePanel.vue'
 import SharedResumeView from './components/SharedResumeView.vue'
 import Sheet from './components/Sheet.vue'
@@ -37,6 +38,7 @@ const tabTitle = computed(() => TABS.find((t) => t.id === tab.value)!.title)
 const shareOpen = ref(false)
 const saveOpen = ref(false)
 const accountOpen = ref(false)
+const sectionsOpen = ref(false)
 
 /** 当前工作副本的名称与保存状态（顶栏胶囊） */
 const docLabel = computed(() => docName.value || '未命名草稿')
@@ -189,7 +191,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
     </header>
 
     <main class="columns">
-      <div class="col-edit"><ResumeEditor /></div>
+      <div class="col-edit"><ResumeEditor @need-login="accountOpen = true" /></div>
       <div class="col-preview">
         <div class="look-bar">
           <div class="look-group">
@@ -200,6 +202,10 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
             <span class="look-label">主题</span>
             <ThemePicker v-model="themeId" />
           </div>
+          <div class="look-group">
+            <span class="look-label">板块</span>
+            <button class="look-btn" type="button" @click="sectionsOpen = true"><Icon name="layers" />排序与显隐</button>
+          </div>
         </div>
         <TemplatePreview :resume="resume" :template-id="templateId" :theme-id="themeId" bounded />
       </div>
@@ -209,6 +215,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
       <SaveResumeForm v-if="saveOpen" @done="saveOpen = false" @cancel="saveOpen = false" />
     </Sheet>
     <Sheet v-model:open="shareOpen" title="分享与备份"><SharePanel /></Sheet>
+    <Sheet v-model:open="sectionsOpen" title="板块与顺序"><SectionManager v-if="sectionsOpen" /></Sheet>
     <Sheet v-model:open="accountOpen" title="个人中心">
       <AccountPanel v-if="accountOpen" @open-editor="editFromAccount" />
     </Sheet>
@@ -227,7 +234,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
     </header>
 
     <main class="narrow-body">
-      <ResumeEditor v-show="tab === 'edit'" class="pane" />
+      <ResumeEditor v-show="tab === 'edit'" class="pane" @need-login="accountOpen = true" />
       <div v-show="tab === 'preview'" class="preview-page">
         <div class="look-group">
           <span class="look-label">模板</span>
@@ -236,6 +243,10 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
         <div class="look-group">
           <span class="look-label">主题</span>
           <ThemePicker v-model="themeId" />
+        </div>
+        <div class="look-group">
+          <span class="look-label">板块</span>
+          <button class="look-btn" type="button" @click="sectionsOpen = true"><Icon name="layers" />排序与显隐</button>
         </div>
         <TemplatePreview :resume="resume" :template-id="templateId" :theme-id="themeId" />
         <div class="preview-actions">
@@ -270,6 +281,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
       <SaveResumeForm v-if="saveOpen" @done="saveOpen = false" @cancel="saveOpen = false" />
     </Sheet>
     <Sheet v-model:open="shareOpen" title="分享与导出"><SharePanel /></Sheet>
+    <Sheet v-model:open="sectionsOpen" title="板块与顺序"><SectionManager v-if="sectionsOpen" /></Sheet>
   </div>
 
   <ConfirmHost />
@@ -386,6 +398,23 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
   gap: 10px 20px;
   padding: 0 4px;
 }
+.look-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 11px;
+  background: var(--fill);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s var(--ease);
+}
+.look-btn svg { width: 16px; height: 16px; color: var(--muted); }
+.look-btn:hover { background: var(--fill-strong); }
 
 /* ---------- 窄屏 ---------- */
 .narrow { min-height: 100vh; min-height: 100dvh; }

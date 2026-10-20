@@ -1,13 +1,15 @@
 import type { Resume } from '../model/resume'
+import { photoPublicUrl } from '../cloud/client'
 import type { TemplateId } from './catalog'
 import type { ThemeId } from './themes'
 
 /** 模板渲染契约：模板脚本在 window 上暴露的渲染函数 */
 export type ShowmeWindow = Window & { __showme_render?: (data: unknown) => void }
 
-/** 渲染数据：简历内容 + 可选主题（运行时据此切换 html[data-theme]，见 templates/runtime.css） */
+/** 渲染数据：简历内容 + 可选主题 + 由照片路径推导的公开地址（不写入简历 JSON） */
 export interface RenderData extends Resume {
   showmeTheme?: string
+  photoURL?: string
 }
 
 /**
@@ -43,9 +45,11 @@ export function plainResume(resume: Resume): Resume {
   return JSON.parse(JSON.stringify(resume)) as Resume
 }
 
-/** 去响应式并附加主题，得到可跨文档传递的渲染数据 */
+/** 去响应式并附加主题与照片地址，得到可跨文档传递的渲染数据 */
 export function renderPayload(resume: Resume, themeId?: ThemeId): RenderData {
   const data = plainResume(resume) as RenderData
   if (themeId) data.showmeTheme = themeId
+  const photoURL = photoPublicUrl(resume.basics.photo)
+  if (photoURL) data.photoURL = photoURL
   return data
 }

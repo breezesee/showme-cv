@@ -76,6 +76,45 @@ async function waitSettled(iframe: HTMLIFrameElement): Promise<void> {
   await nextFrame()
 }
 
+/**
+ * 远程照片转 data URL：离屏 iframe 截图前必须已经解码，否则 PDF 里照片位置为空。
+ * 抓取失败返回空串，由模板按无照片降级。
+ */
+export async function photoDataUrl(url: string): Promise<string> {
+  if (!url) return ''
+  try {
+    const response = await fetch(url)
+    if (!response.ok) return ''
+    const blob = await response.blob()
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result ?? ''))
+      reader.onerror = () => reject(reader.error)
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    return ''
+  }
+}
+
+/** 等待模板里的照片解码；失败时模板会移除图片，不阻塞导出 */
+async function waitImages(doc: Document): Promise<void> {
+  const images = [...doc.querySelectorAll<HTMLImageElement>('img.r-photo')]
+  await Promise.all(images.map(async (img) => {
+    try {
+      if (typeof img.decode === 'function') await img.decode()
+      else if (!img.complete) {
+        await new Promise<void>((resolve) => {
+          img.addEventListener('load', () => resolve(), { once: true })
+          img.addEventListener('error', () => resolve(), { once: true })
+        })
+      }
+    } catch {
+      /* 图片加载失败：保持无照片结果 */
+    }
+  }))
+}
+
 export async function renderResumePdf(resume: Resume, templateId: TemplateId, themeId: ThemeId): Promise<Blob> {
   // 版本守卫：过期页面禁止导出（无法拿到与自身代码同代的模板/修复），引导用户刷新；unknown/latest 放行
   await assertUpToDate()
@@ -85,16 +124,20 @@ export async function renderResumePdf(resume: Resume, templateId: TemplateId, th
     fetchTemplate(templateId),
   ])
 
+  const payload = renderPayload(resume, themeId)
+  if (payload.photoURL) payload.photoURL = await photoDataUrl(payload.photoURL)
+
   const iframe = document.createElement('iframe')
   iframe.setAttribute('aria-hidden', 'true')
   iframe.title = ''
   // 不用 display:none：隐藏文档无法排版分页
   iframe.style.cssText = `position:fixed;left:-10000px;top:0;width:${PAPER_W}px;height:1123px;border:0;visibility:hidden`
-  iframe.srcdoc = injectData(template, renderPayload(resume, themeId))
+  iframe.srcdoc = injectData(template, payload)
   document.body.appendChild(iframe)
 
   try {
     await waitLoad(iframe)
+    if (iframe.contentDocument) await waitImages(iframe.contentDocument)
     await waitSettled(iframe)
     const doc = iframe.contentDocument
     if (!doc) throw new Error('渲染失败')

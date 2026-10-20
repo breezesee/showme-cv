@@ -60,6 +60,25 @@ function showMessage(text: string): void {
   document.body.appendChild(p)
 }
 
+/** 字体与照片就绪后再唤起打印；最多等 3 秒，慢网也不阻塞 */
+async function waitReadyForPrint(): Promise<void> {
+  const fonts = document.fonts?.ready ?? Promise.resolve()
+  const images = [...document.querySelectorAll<HTMLImageElement>('img.r-photo')]
+  const decoded = images.map((img) => {
+    if (typeof img.decode === 'function') return img.decode().catch(() => undefined)
+    if (img.complete) return Promise.resolve()
+    return new Promise<void>((resolve) => {
+      img.addEventListener('load', () => resolve(), { once: true })
+      img.addEventListener('error', () => resolve(), { once: true })
+    })
+  })
+  await Promise.race([
+    Promise.all([fonts.catch(() => undefined), ...decoded])
+      .then(() => new Promise<void>((resolve) => setTimeout(resolve, 150))),
+    new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+  ])
+}
+
 async function main(): Promise<void> {
   const payload = loadPrintPayload()
   if (!payload) {
@@ -100,8 +119,8 @@ async function main(): Promise<void> {
   })
   window.addEventListener('afterprint', fitPaper)
 
-  // 等排版与字体稳定后自动唤起打印；部分移动浏览器会忽略非点击触发的打印，此时用顶栏按钮
-  window.setTimeout(() => window.print(), 500)
+  // 等照片与字体稳定后自动唤起打印；部分移动浏览器会忽略非点击触发的打印，此时用顶栏按钮
+  void waitReadyForPrint().then(() => window.print())
 }
 
 void main()

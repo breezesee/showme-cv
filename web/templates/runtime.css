@@ -11,6 +11,8 @@
 [data-flow] > :first-child, [data-cont] > :first-child { margin-top:0 !important; }
 .rt-p { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
 .rt-ul { margin:0; padding-left:1.2em; }
+/* 附加信息中的 http(s) 链接：跟随所在文字颜色，打印时保留可读下划线 */
+.rt-link { color:inherit; text-decoration:underline; text-decoration-thickness:1px; text-underline-offset:2px; overflow-wrap:anywhere; }
 .rt-ul li { overflow-wrap:anywhere; }
 .rt-gap { margin-top:.6em; }
 /* 纸面顶部装饰条：主题未设置时高度为 0，不显示 */

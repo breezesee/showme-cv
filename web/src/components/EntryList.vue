@@ -8,6 +8,8 @@ const props = defineProps<{
   noun: string
   create: () => T
   summary: (item: T) => string
+  /** 可选上限；达到后禁用添加 */
+  max?: number
 }>()
 
 function move(i: number, delta: number) {
@@ -29,6 +31,7 @@ function remove(i: number) {
 }
 
 function add() {
+  if (props.max !== undefined && props.items.length >= props.max) return
   props.items.push(props.create())
 }
 </script>
@@ -52,9 +55,15 @@ function add() {
         <slot :item="item" :index="i" />
       </div>
     </div>
-    <button class="btn btn-plain add-btn" type="button" @click="add">
+    <button
+      class="btn btn-plain add-btn"
+      type="button"
+      :disabled="max !== undefined && items.length >= max"
+      @click="add"
+    >
       <Icon name="plus" />添加{{ noun }}
     </button>
+    <p v-if="max !== undefined && items.length >= max" class="limit-hint">最多 {{ max }} 个{{ noun }}</p>
   </div>
 </template>
 
@@ -93,4 +102,6 @@ function add() {
 .icon-btn.danger { color: var(--danger); }
 .entry-fields { display: flex; flex-direction: column; gap: 12px; }
 .add-btn { align-self: flex-start; min-height: 44px; }
+.add-btn:disabled { opacity: 0.5; cursor: default; }
+.limit-hint { margin: 0; padding-left: 4px; font-size: 12px; color: var(--muted); }
 </style>

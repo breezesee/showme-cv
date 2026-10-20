@@ -7,15 +7,23 @@ import {
   AlignmentType,
   BorderStyle,
   Document,
+  ImageRun,
   Packer,
   Paragraph,
+  Table,
+  TableBorders,
+  TableCell,
+  TableRow,
   Tab,
   TabStopType,
   TextRun,
+  VerticalAlign,
+  WidthType,
   convertMillimetersToTwip,
-  type IParagraphOptions,
 } from 'docx'
-import type { Resume } from '../model/resume'
+import { photoPublicUrl } from '../cloud/client'
+import { SECTION_TITLES, customSectionId, visibleSectionIds } from '../model/layout'
+import type { Basics, Resume, SectionId } from '../model/resume'
 import { downloadBlob, exportFileName } from './download'
 import { parseRich, type RichBlock } from './rich'
 
@@ -56,12 +64,18 @@ function sectionTitle(title: string): Paragraph {
 }
 
 function richParagraphs(blocks: RichBlock[]): Paragraph[] {
-  return blocks.map((b) => {
-    const options: IParagraphOptions =
-      b.kind === 'bullets'
-        ? { children: b.items.map((t) => new TextRun({ text: t, size: 21, color: INK })), bullet: { level: 0 } }
-        : { children: [new TextRun({ text: b.text, size: 21, color: INK })] }
-    return new Paragraph({ ...options, spacing: { before: b.gap ? 120 : 0, after: 40, line: 300 } })
+  return blocks.flatMap((b) => {
+    if (b.kind === 'bullets') {
+      return b.items.map((text, i) => new Paragraph({
+        children: [new TextRun({ text, size: 21, color: INK })],
+        bullet: { level: 0 },
+        spacing: { before: b.gap && i === 0 ? 120 : 0, after: 40, line: 300 },
+      }))
+    }
+    return [new Paragraph({
+      children: [new TextRun({ text: b.text, size: 21, color: INK })],
+      spacing: { before: b.gap ? 120 : 0, after: 40, line: 300 },
+    })]
   })
 }
 
@@ -76,77 +90,167 @@ function bulletList(items: string[]): Paragraph[] {
   return richParagraphs(cleaned.length ? [{ kind: 'bullets', items: cleaned, gap: false }] : [])
 }
 
-export function buildWordDocument(resume: Resume): Document {
+/** 联系方式一行：城市、电话、邮箱，再接非空附加项（标签：值，纯文本） */
+function contactLine(basics: Basics): string {
+  const has = (s: string) => s.trim() !== ''
+  const extras = basics.extras
+    .filter((e) => e.value.trim() !== '')
+    .map((e) => (has(e.label) ? `${e.label.trim()}：` : '') + e.value.trim())
+  return [basics.city, basics.phone, basics.email]
+    .filter(has)
+    .map((s) => s.trim())
+    .concat(extras)
+    .join(' · ')
+}
+
+/** 单个板块的段落；无内容返回空数组（不输出分节标题） */
+function sectionBody(id: SectionId, resume: Resume): Paragraph[] {
   const { basics, education, work, projects, skills } = resume
   const has = (s: string) => s.trim() !== ''
-  const body: Paragraph[] = []
 
+  switch (id) {
+    case 'education': {
+      const rows = education.flatMap((e) => {
+        let head = e.school.trim()
+        if (has(e.major)) head += ` · ${e.major.trim()}`
+        if (has(e.degree)) head += `（${e.degree.trim()}）`
+        if (!head) return []
+        return [entryHead(head, period(e.start, e.end)), ...richField(e.notes)]
+      })
+      return rows.length ? [sectionTitle(SECTION_TITLES.education), ...rows] : []
+    }
+    case 'work': {
+      const rows = work.flatMap((w) => {
+        let head = w.company.trim()
+        if (has(w.position)) head += ` · ${w.position.trim()}`
+        if (!head) return []
+        return [entryHead(head, period(w.start, w.end)), ...richField(w.description), ...bulletList(w.highlights)]
+      })
+      return rows.length ? [sectionTitle(SECTION_TITLES.work), ...rows] : []
+    }
+    case 'projects': {
+      const rows = projects.flatMap((p) => {
+        let head = p.name.trim()
+        if (has(p.role)) head += ` · ${p.role.trim()}`
+        if (!head) return []
+        return [entryHead(head, period(p.start, p.end)), ...richField(p.description)]
+      })
+      return rows.length ? [sectionTitle(SECTION_TITLES.projects), ...rows] : []
+    }
+    case 'skills': {
+      const rows = skills
+        .map((g) => {
+          const items = g.items.filter(has).join('、')
+          if (!has(g.category) && !items) return null
+          return new Paragraph({
+            children: [
+              new TextRun({ text: g.category.trim(), size: 21, color: MUTED }),
+              ...(has(g.category) && items ? [new TextRun({ text: '  ', size: 21 })] : []),
+              ...(items ? [new TextRun({ text: items, size: 21, color: INK })] : []),
+            ],
+            spacing: { after: 40, line: 300 },
+          })
+        })
+        .filter((p) => p !== null)
+      return rows.length ? [sectionTitle(SECTION_TITLES.skills), ...rows] : []
+    }
+    case 'summary': {
+      const rows = richField(basics.summary)
+      return rows.length ? [sectionTitle(SECTION_TITLES.summary), ...rows] : []
+    }
+    default: {
+      const custom = resume.custom.find((c) => customSectionId(c.id) === id)
+      if (!custom) return []
+      const rows = richField(custom.body)
+      if (!rows.length) return []
+      const title = custom.title.trim()
+      return [...(title ? [sectionTitle(title)] : []), ...rows]
+    }
+  }
+}
+
+export interface WordPhoto {
+  data: Uint8Array
+  type: 'jpg' | 'png'
+}
+
+/** 页头文字：有照片时左对齐放进表格左列，无照片时居中 */
+function headerParagraphs(basics: Basics, contacts: string, centered: boolean): Paragraph[] {
+  const has = (s: string) => s.trim() !== ''
+  const rows: Paragraph[] = []
   if (has(basics.name)) {
-    body.push(new Paragraph({
+    rows.push(new Paragraph({
       children: [new TextRun({ text: basics.name.trim(), bold: true, size: 44, color: INK })],
-      alignment: AlignmentType.CENTER,
+      ...(centered ? { alignment: AlignmentType.CENTER } : {}),
       spacing: { after: 60 },
     }))
   }
   if (has(basics.title)) {
-    body.push(new Paragraph({
+    rows.push(new Paragraph({
       children: [new TextRun({ text: basics.title.trim(), size: 22, color: MUTED })],
-      alignment: AlignmentType.CENTER,
+      ...(centered ? { alignment: AlignmentType.CENTER } : {}),
       spacing: { after: 40 },
     }))
   }
-  const contacts = [basics.city, basics.phone, basics.email].filter(has).join(' · ')
   if (contacts) {
-    body.push(new Paragraph({
+    rows.push(new Paragraph({
       children: [new TextRun({ text: contacts, size: 18, color: MUTED })],
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 200 },
+      ...(centered ? { alignment: AlignmentType.CENTER } : {}),
+      spacing: { after: centered ? 200 : 0 },
     }))
   }
+  return rows
+}
 
-  const summary = richField(basics.summary)
-  if (summary.length) body.push(sectionTitle('自我评价'), ...summary)
-
-  const edu = education.flatMap((e) => {
-    let head = e.school.trim()
-    if (has(e.major)) head += ` · ${e.major.trim()}`
-    if (has(e.degree)) head += `（${e.degree.trim()}）`
-    if (!head) return []
-    return [entryHead(head, period(e.start, e.end)), ...richField(e.notes)]
+/** 有照片的页头：无边框两列表格，右侧 25×35mm 图片 */
+function headerTable(basics: Basics, contacts: string, photo: WordPhoto): Table {
+  const photoWidth = convertMillimetersToTwip(25)
+  const textWidth = CONTENT_TWIPS - photoWidth - convertMillimetersToTwip(4)
+  const noMargin = { top: 0, bottom: 0, left: 0, right: 0 }
+  const text = headerParagraphs(basics, contacts, false)
+  return new Table({
+    width: { size: CONTENT_TWIPS, type: WidthType.DXA },
+    columnWidths: [textWidth, photoWidth],
+    borders: TableBorders.NONE,
+    rows: [new TableRow({
+      children: [
+        new TableCell({
+          width: { size: textWidth, type: WidthType.DXA },
+          margins: noMargin,
+          verticalAlign: VerticalAlign.CENTER,
+          children: text.length ? text : [new Paragraph('')],
+        }),
+        new TableCell({
+          width: { size: photoWidth, type: WidthType.DXA },
+          margins: noMargin,
+          verticalAlign: VerticalAlign.CENTER,
+          children: [new Paragraph({
+            alignment: AlignmentType.RIGHT,
+            spacing: { before: 0, after: 0 },
+            children: [new ImageRun({
+              data: photo.data,
+              transformation: { width: 95, height: 133 },
+              type: photo.type,
+            })],
+          })],
+        }),
+      ],
+    })],
   })
-  if (edu.length) body.push(sectionTitle('教育经历'), ...edu)
+}
 
-  const jobs = work.flatMap((w) => {
-    let head = w.company.trim()
-    if (has(w.position)) head += ` · ${w.position.trim()}`
-    if (!head) return []
-    return [entryHead(head, period(w.start, w.end)), ...richField(w.description), ...bulletList(w.highlights)]
-  })
-  if (jobs.length) body.push(sectionTitle('工作经历'), ...jobs)
+export function buildWordDocument(resume: Resume, photo?: WordPhoto): Document {
+  const { basics } = resume
+  const contacts = contactLine(basics)
+  const body: (Paragraph | Table)[] = []
 
-  const proj = projects.flatMap((p) => {
-    let head = p.name.trim()
-    if (has(p.role)) head += ` · ${p.role.trim()}`
-    if (!head) return []
-    return [entryHead(head, period(p.start, p.end)), ...richField(p.description)]
-  })
-  if (proj.length) body.push(sectionTitle('项目经历'), ...proj)
+  if (photo) body.push(headerTable(basics, contacts, photo))
+  else body.push(...headerParagraphs(basics, contacts, true))
 
-  const skillRows = skills
-    .map((g) => {
-      const items = g.items.filter(has).join('、')
-      if (!has(g.category) && !items) return null
-      return new Paragraph({
-        children: [
-          new TextRun({ text: g.category.trim(), size: 21, color: MUTED }),
-          ...(has(g.category) && items ? [new TextRun({ text: '  ', size: 21 })] : []),
-          ...(items ? [new TextRun({ text: items, size: 21, color: INK })] : []),
-        ],
-        spacing: { after: 40, line: 300 },
-      })
-    })
-    .filter((p) => p !== null)
-  if (skillRows.length) body.push(sectionTitle('技能'), ...skillRows)
+  const customIds = resume.custom.map((c) => c.id)
+  for (const id of visibleSectionIds(resume.layout, customIds)) {
+    body.push(...sectionBody(id, resume))
+  }
 
   return new Document({
     sections: [{
@@ -161,8 +265,25 @@ export function buildWordDocument(resume: Resume): Document {
   })
 }
 
-export async function buildWordBlob(resume: Resume): Promise<Blob> {
-  return Packer.toBlob(buildWordDocument(resume))
+/** 导出前抓取照片；网络或对象不存在时按无照片导出 */
+async function loadResumePhoto(resume: Resume): Promise<WordPhoto | undefined> {
+  const url = photoPublicUrl(resume.basics.photo)
+  if (!url) return undefined
+  try {
+    const response = await fetch(url)
+    if (!response.ok) return undefined
+    return {
+      data: new Uint8Array(await response.arrayBuffer()),
+      type: /\.png$/i.test(resume.basics.photo) ? 'png' : 'jpg',
+    }
+  } catch {
+    return undefined
+  }
+}
+
+export async function buildWordBlob(resume: Resume, photo?: WordPhoto): Promise<Blob> {
+  const image = photo ?? await loadResumePhoto(resume)
+  return Packer.toBlob(buildWordDocument(resume, image))
 }
 
 export async function exportResumeWord(resume: Resume): Promise<void> {

@@ -1,4 +1,16 @@
-import { RESUME_VERSION, type Basics, type Education, type Project, type Resume, type SkillGroup, type Work } from './resume'
+import { isValidCustomId, reconcileLayout } from './layout'
+import { isPhotoPath } from './photo'
+import {
+  RESUME_VERSION,
+  type BasicExtra,
+  type Basics,
+  type CustomSection,
+  type Education,
+  type Project,
+  type Resume,
+  type SkillGroup,
+  type Work,
+} from './resume'
 
 /** 数据格式错误：path 指出出错位置，便于排查 */
 export class ResumeFormatError extends Error {
@@ -42,6 +54,46 @@ function objList<T>(o: Obj, key: string, path: string, read: (item: Obj, path: s
   })
 }
 
+const readExtra = (o: Obj, p: string): BasicExtra => ({
+  label: str(o, 'label', p),
+  value: str(o, 'value', p),
+})
+
+/** 附加项只保留有值的行；空行由编辑器自行占位，不进数据 */
+function readExtras(o: Obj, p: string): BasicExtra[] {
+  return objList(o, 'extras', p, readExtra).filter((e) => e.value.trim() !== '')
+}
+
+/** 照片路径非法时静默置空：完整 URL、路径穿越等不应让整份简历无法导入 */
+function readPhoto(o: Obj, p: string): string {
+  const value = str(o, 'photo', p)
+  return isPhotoPath(value) ? value : ''
+}
+
+/**
+ * 自定义模块：缺失/非法 id 按 c1、c2… 顺序补齐（重复 normalize 结果稳定），
+ * 标题与正文都为空则丢弃。
+ */
+function readCustomSections(o: Obj, p: string): CustomSection[] {
+  const items = objList(o, 'custom', p, (item, path) => ({
+    id: typeof item.id === 'string' ? item.id : '',
+    title: str(item, 'title', path),
+    body: str(item, 'body', path),
+  })).filter((s) => s.title.trim() !== '' || s.body.trim() !== '')
+
+  const used = new Set<string>()
+  let next = 1
+  return items.map((s) => {
+    let id = s.id
+    if (!isValidCustomId(id) || used.has(id)) {
+      while (used.has(`c${next}`)) next++
+      id = `c${next}`
+    }
+    used.add(id)
+    return { ...s, id }
+  })
+}
+
 const readBasics = (o: Obj, p: string): Basics => ({
   name: str(o, 'name', p),
   title: str(o, 'title', p),
@@ -49,6 +101,8 @@ const readBasics = (o: Obj, p: string): Basics => ({
   email: str(o, 'email', p),
   city: str(o, 'city', p),
   summary: str(o, 'summary', p),
+  extras: readExtras(o, p),
+  photo: readPhoto(o, p),
 })
 
 const readEducation = (o: Obj, p: string): Education => ({
@@ -94,6 +148,7 @@ export function normalizeResume(input: unknown): Resume {
   }
   const basics = input.basics
   if (basics !== undefined && !isObj(basics)) throw new ResumeFormatError('$.basics', '应为对象')
+  const custom = readCustomSections(input, '$')
   return {
     version: RESUME_VERSION,
     basics: readBasics(basics ?? {}, '$.basics'),
@@ -101,6 +156,8 @@ export function normalizeResume(input: unknown): Resume {
     work: objList(input, 'work', '$', readWork),
     projects: objList(input, 'projects', '$', readProject),
     skills: objList(input, 'skills', '$', readSkillGroup),
+    custom,
+    layout: reconcileLayout(input.layout, custom.map((c) => c.id)),
   }
 }
 

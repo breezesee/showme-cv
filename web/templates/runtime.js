@@ -30,6 +30,67 @@
     return SM.has(a) ? a : (SM.has(b) ? b : '');
   };
 
+  /* 附加信息内容：仅 http(s) 渲染为链接，其余按纯文本转义 */
+  SM.link = function (value) {
+    var s = String(value == null ? '' : value).trim();
+    if (/^https?:\/\//i.test(s)) {
+      var href = SM.esc(s);
+      return '<a class="rt-link" href="' + href + '" target="_blank" rel="noopener noreferrer">' + href + '</a>';
+    }
+    return SM.esc(s);
+  };
+
+  /* 基本信息附加项：返回 { label, html }，标签可空；html 已做转义 */
+  SM.extras = function (basics) {
+    return ((basics && basics.extras) || []).filter(function (x) {
+      return x && SM.has(x.value);
+    }).map(function (x) {
+      return {
+        label: x.label || '',
+        html: (SM.has(x.label) ? SM.esc(x.label) + '：' : '') + SM.link(x.value),
+      };
+    });
+  };
+
+  var FIXED_SECTIONS = ['education', 'work', 'projects', 'skills', 'summary'];
+
+  /* 照片：地址为空不输出；加载失败移除图片本身，页头文字自然铺满 */
+  SM.photo = function (url, cls) {
+    if (!SM.has(url)) return '';
+    return '<img class="r-photo' + (cls ? ' ' + cls : '') + '" src="' + SM.esc(url) +
+      '" alt="" onerror="this.remove()">';
+  };
+
+  /* 按 layout 顺序返回应渲染的板块：跳过隐藏、未知与不存在的自定义模块 */
+  SM.sectionIds = function (data) {
+    data = data || {};
+    var custom = [];
+    (data.custom || []).forEach(function (c) {
+      if (c && c.id) custom.push('custom:' + c.id);
+    });
+    var known = FIXED_SECTIONS.concat(custom);
+    var layout = data.layout || {};
+    var hidden = Array.isArray(layout.hidden) ? layout.hidden : [];
+    var order = Array.isArray(layout.order) ? layout.order : [];
+    var out = [];
+    function add(id) {
+      if (known.indexOf(id) >= 0 && hidden.indexOf(id) < 0 && out.indexOf(id) < 0) out.push(id);
+    }
+    order.forEach(add);
+    FIXED_SECTIONS.filter(function (id) { return id !== 'summary'; }).concat(custom, ['summary']).forEach(add);
+    return out;
+  };
+
+  SM.customSection = function (data, id) {
+    if (String(id).indexOf('custom:') !== 0) return null;
+    var cid = String(id).slice(7);
+    var list = (data && data.custom) || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && list[i].id === cid) return list[i];
+    }
+    return null;
+  };
+
   /* 多行文本：回车换行，空行分段，以 - • · 开头的行显示为圆点列表；每行是一个分页单元 */
   SM.rich = function (text, cls) {
     var rows = String(text == null ? '' : text).replace(/\r\n?/g, '\n').split('\n');

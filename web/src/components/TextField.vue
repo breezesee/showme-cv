@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { useId } from 'vue'
+import { nextTick, ref, useId } from 'vue'
+import { insertBulletAt } from '../ui/textarea'
 
 withDefaults(
   defineProps<{
@@ -10,19 +11,39 @@ withDefaults(
     placeholder?: string
     /** 字段下方的格式说明 */
     hint?: string
+    /** 多行字段显示「插入要点」按钮 */
+    bullets?: boolean
+    /** 最大输入长度，超出后浏览器阻止继续输入 */
+    maxlength?: number
   }>(),
-  { multiline: false, rows: 3, type: 'text', placeholder: '', hint: '' },
+  { multiline: false, rows: 3, type: 'text', placeholder: '', hint: '', bullets: false },
 )
 const model = defineModel<string>({ required: true })
 const id = useId()
+const area = ref<HTMLTextAreaElement>()
+
+function insertBullet(): void {
+  const el = area.value
+  const start = el?.selectionStart ?? model.value.length
+  const end = el?.selectionEnd ?? start
+  const next = insertBulletAt(model.value, start, end)
+  model.value = next.text
+  void nextTick(() => {
+    el?.focus()
+    el?.setSelectionRange(next.caret, next.caret)
+  })
+}
 </script>
 
 <template>
   <div class="field">
     <label class="field-label" :for="id">{{ label }}</label>
-    <textarea v-if="multiline" :id="id" v-model="model" class="field-input field-area" :rows="rows" :placeholder="placeholder" />
-    <input v-else :id="id" v-model="model" class="field-input" :type="type" :placeholder="placeholder" autocomplete="off" />
-    <p v-if="hint" class="field-hint">{{ hint }}</p>
+    <textarea v-if="multiline" :id="id" ref="area" v-model="model" class="field-input field-area" :rows="rows" :placeholder="placeholder" :maxlength="maxlength" />
+    <input v-else :id="id" v-model="model" class="field-input" :type="type" :placeholder="placeholder" :maxlength="maxlength" autocomplete="off" />
+    <div v-if="hint || (multiline && bullets)" class="field-foot">
+      <p v-if="hint" class="field-hint">{{ hint }}</p>
+      <button v-if="multiline && bullets" class="field-action" type="button" @click="insertBullet">插入要点</button>
+    </div>
   </div>
 </template>
 
@@ -47,5 +68,19 @@ const id = useId()
   box-shadow: var(--ring);
 }
 .field-area { resize: vertical; line-height: 1.6; }
-.field-hint { margin: 0; padding-left: 4px; font-size: 12px; color: var(--muted); }
+.field-foot { display: flex; align-items: center; gap: 8px; padding-left: 4px; }
+.field-hint { flex: 1; margin: 0; font-size: 12px; color: var(--muted); }
+.field-action {
+  flex: none;
+  min-height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 999px;
+  background: var(--fill);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.field-action:active { background: var(--fill-strong); }
 </style>

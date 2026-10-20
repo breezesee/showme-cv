@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { stripFrozenDimensions, type StyleNode } from './pdf'
+import { describe, expect, it, vi } from 'vitest'
+import { photoDataUrl, stripFrozenDimensions, type StyleNode } from './pdf'
 
 /** 构造最小结构树：pdf.ts 的 stripFrozenDimensions 只依赖 style/children/namespaceURI */
 function node(opts: { ns?: string; style?: Record<string, string>; children?: StyleNode[] }): StyleNode {
@@ -52,5 +52,26 @@ describe('stripFrozenDimensions', () => {
     expect(stripFrozenDimensions(node({}))).toBe(0)
     const deep = node({ style: { height: '1px' }, children: [node({ children: [node({ style: { width: '2px' } })] })] })
     expect(stripFrozenDimensions(deep)).toBe(1) // 根节点 height 保留，仅孙节点 width 被剥
+  })
+})
+
+describe('photoDataUrl', () => {
+  it('没有地址或抓取失败时返回空串，PDF 按无照片导出', async () => {
+    expect(await photoDataUrl('')).toBe('')
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+    try {
+      expect(await photoDataUrl('https://x.test/p.jpg')).toBe('')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('对象不存在（非 2xx）同样降级', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }))
+    try {
+      expect(await photoDataUrl('https://x.test/p.jpg')).toBe('')
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

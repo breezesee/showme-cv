@@ -27,6 +27,7 @@
   .side-skill { font-size:12.5px; line-height:1.7; overflow-wrap:anywhere; }
   .side-skill + .side-skill { margin-top:8px; }
   .side-skill .c { color:var(--side-muted); font-size:11.5px; display:block; }
+  .side-photo { display:block; width:30mm; height:42mm; object-fit:cover; border-radius:4px; margin:0 auto 12px; }
   .side-contact { font-size:12.5px; line-height:1.9; color:#dfe6f3; overflow-wrap:anywhere; }
   .main h2 { font-size:14px; letter-spacing:3px; margin:0 0 12px; color:var(--side); border-bottom:2px solid var(--side); padding-bottom:6px; }
   .main section + section { margin-top:22px; }
@@ -67,44 +68,60 @@ SM.mount(function (d) {
     return '<div class="entry" data-avoid><div data-u' + (body ? ' data-keep' : '') + '>' + h + '</div>' + body + '</div>';
   }
 
-  /* 侧栏 */
-  var side = '<div data-u><h1>' + esc(b.name || '') + '</h1>' +
+  /* 侧栏 / 主栏位置固定，layout 顺序只在各自栏内生效 */
+  var side = '<div data-u>' + SM.photo(d.photoURL, 'side-photo') + '<h1>' + esc(b.name || '') + '</h1>' +
     (has(b.title) ? '<div class="r-title">' + esc(b.title) + '</div>' : '') + '</div>';
 
-  side += sideSection('联系方式', [b.city, b.phone, b.email].filter(has).map(function (x) {
-    return '<div class="side-contact" data-u>' + esc(x) + '</div>';
+  var contactLines = [b.city, b.phone, b.email].filter(has).map(esc)
+    .concat(SM.extras(b).map(function (x) { return x.html; }));
+  side += sideSection('联系方式', contactLines.map(function (x) {
+    return '<div class="side-contact" data-u>' + x + '</div>';
   }).join(''));
 
-  side += sideSection('技能', (d.skills || []).map(function (g) {
-    var items = lines(g.items).map(esc).join('、');
-    if (!has(g.category) && !items) return '';
-    return '<div class="side-skill" data-u>' +
-      (has(g.category) ? '<span class="c">' + esc(g.category) + '</span>' : '') + items + '</div>';
-  }).join(''));
-
-  side += sideSection('教育经历', (d.education || []).map(function (e) {
-    var h = '<div class="t">' + esc(e.school || '') + '</div>';
-    var sub = [e.major, e.degree].filter(has).map(esc).join(' · ');
-    if (sub) h += '<div class="d">' + sub + '</div>';
-    if (has(e.start) || has(e.end)) h += '<div class="d">' + esc(period(e.start, e.end)) + '</div>';
-    var notes = SM.rich(e.notes);
-    return '<div class="side-item" data-avoid><div data-u' + (notes ? ' data-keep' : '') + '>' + h + '</div>' + notes + '</div>';
-  }).join(''));
-
-  /* 主栏 */
   var main = '';
-  main += mainSection('工作经历', (d.work || []).map(function (w) {
-    var body = SM.rich(w.description) + SM.list(w.highlights, 'bullets');
-    return entry(esc(w.company || ''), period(w.start, w.end), has(w.position) ? esc(w.position) : '', body);
-  }).join(''));
 
-  main += mainSection('项目经历', (d.projects || []).map(function (p) {
-    var h = esc(p.name || '');
-    if (has(p.role)) h += ' · ' + esc(p.role);
-    return entry(h, period(p.start, p.end), '', SM.rich(p.description));
-  }).join(''));
+  function customBlock(c) {
+    var body = SM.rich(c.body);
+    if (!body) return '';
+    var title = has(c.title) ? '<h2 data-u data-keep>' + esc(c.title) + '</h2>' : '';
+    return '<section>' + title + body + '</section>';
+  }
 
-  if (has(b.summary)) main += mainSection('自我评价', SM.rich(b.summary));
+  SM.sectionIds(d).forEach(function (id) {
+    if (id === 'education') {
+      side += sideSection('教育经历', (d.education || []).map(function (e) {
+        var h = '<div class="t">' + esc(e.school || '') + '</div>';
+        var sub = [e.major, e.degree].filter(has).map(esc).join(' · ');
+        if (sub) h += '<div class="d">' + sub + '</div>';
+        if (has(e.start) || has(e.end)) h += '<div class="d">' + esc(period(e.start, e.end)) + '</div>';
+        var notes = SM.rich(e.notes);
+        return '<div class="side-item" data-avoid><div data-u' + (notes ? ' data-keep' : '') + '>' + h + '</div>' + notes + '</div>';
+      }).join(''));
+    } else if (id === 'skills') {
+      side += sideSection('技能', (d.skills || []).map(function (g) {
+        var items = lines(g.items).map(esc).join('、');
+        if (!has(g.category) && !items) return '';
+        return '<div class="side-skill" data-u>' +
+          (has(g.category) ? '<span class="c">' + esc(g.category) + '</span>' : '') + items + '</div>';
+      }).join(''));
+    } else if (id === 'work') {
+      main += mainSection('工作经历', (d.work || []).map(function (w) {
+        var body = SM.rich(w.description) + SM.list(w.highlights, 'bullets');
+        return entry(esc(w.company || ''), period(w.start, w.end), has(w.position) ? esc(w.position) : '', body);
+      }).join(''));
+    } else if (id === 'projects') {
+      main += mainSection('项目经历', (d.projects || []).map(function (p) {
+        var h = esc(p.name || '');
+        if (has(p.role)) h += ' · ' + esc(p.role);
+        return entry(h, period(p.start, p.end), '', SM.rich(p.description));
+      }).join(''));
+    } else if (id === 'summary') {
+      if (has(b.summary)) main += mainSection('自我评价', SM.rich(b.summary));
+    } else {
+      var c = SM.customSection(d, id);
+      if (c) main += customBlock(c);
+    }
+  });
 
   return {
     sheet: function () {

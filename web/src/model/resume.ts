@@ -1,8 +1,15 @@
+import { defaultLayout } from './layout'
+
 /**
  * 简历数据模型 v1。
  * 以 Android 版 com.showme.app.data.Resume 的 JSON 结构为基础，网页版新增的字段（Work.description）缺省为空，
  * 旧数据可直接导入。长文本字段保留换行，由模板按「回车换行、空行分段、- 开头为圆点」渲染。
  */
+export interface BasicExtra {
+  label: string
+  value: string
+}
+
 export interface Basics {
   name: string
   title: string
@@ -10,6 +17,10 @@ export interface Basics {
   email: string
   city: string
   summary: string
+  /** 基本信息附加项，随联系方式一行展示 */
+  extras: BasicExtra[]
+  /** Supabase Storage 对象路径；空串表示不放照片 */
+  photo: string
 }
 
 export interface Education {
@@ -44,6 +55,20 @@ export interface SkillGroup {
   items: string[]
 }
 
+export interface CustomSection {
+  id: string
+  title: string
+  body: string
+}
+
+export type FixedSectionId = 'education' | 'work' | 'projects' | 'skills' | 'summary'
+export type SectionId = FixedSectionId | `custom:${string}`
+
+export interface ResumeLayout {
+  order: SectionId[]
+  hidden: SectionId[]
+}
+
 export interface Resume {
   version: number
   basics: Basics
@@ -51,15 +76,35 @@ export interface Resume {
   work: Work[]
   projects: Project[]
   skills: SkillGroup[]
+  custom: CustomSection[]
+  layout: ResumeLayout
 }
 
 export const RESUME_VERSION = 1
 
-export const emptyBasics = (): Basics => ({ name: '', title: '', phone: '', email: '', city: '', summary: '' })
+export const emptyBasics = (): Basics => ({
+  name: '',
+  title: '',
+  phone: '',
+  email: '',
+  city: '',
+  summary: '',
+  extras: [],
+  photo: '',
+})
 export const emptyEducation = (): Education => ({ school: '', major: '', degree: '', start: '', end: '', notes: '' })
 export const emptyWork = (): Work => ({ company: '', position: '', start: '', end: '', description: '', highlights: [] })
 export const emptyProject = (): Project => ({ name: '', role: '', start: '', end: '', description: '' })
 export const emptySkillGroup = (): SkillGroup => ({ category: '', items: [] })
+
+/** 自定义模块 id：合法字符集内随机短串，非安全上下文无 randomUUID 时用时间戳兜底 */
+export function newSectionId(): string {
+  const uuid = globalThis.crypto?.randomUUID?.()
+  if (uuid) return uuid.replace(/-/g, '').slice(0, 16)
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`.slice(0, 16)
+}
+
+export const emptyCustomSection = (id = newSectionId()): CustomSection => ({ id, title: '', body: '' })
 
 export const emptyResume = (): Resume => ({
   version: RESUME_VERSION,
@@ -68,15 +113,19 @@ export const emptyResume = (): Resume => ({
   work: [],
   projects: [],
   skills: [],
+  custom: [],
+  layout: defaultLayout([]),
 })
 
-/** 整份简历没有任何内容（预览显示空态引导用） */
+/** 整份简历没有任何内容（预览显示空态引导用）；照片与板块布局不算内容 */
 export function isResumeEmpty(r: Resume): boolean {
   const has = (s: string) => s.trim() !== ''
   const { basics } = r
   return (
     !has(basics.name) && !has(basics.title) && !has(basics.phone) && !has(basics.email) && !has(basics.city) && !has(basics.summary)
+    && !basics.extras.some((e) => has(e.value))
     && r.education.length === 0 && r.work.length === 0 && r.projects.length === 0 && r.skills.length === 0
+    && !r.custom.some((c) => has(c.body))
   )
 }
 
@@ -91,6 +140,8 @@ export function sampleResume(): Resume {
       email: 'lixiaoming@example.com',
       city: '上海',
       summary: '5 年互联网产品经验，主导过 2 款千万级用户产品的从 0 到 1；擅长数据驱动与跨团队协作，关注长期价值与用户体验的平衡。',
+      extras: [],
+      photo: '',
     },
     education: [
       {
@@ -141,5 +192,7 @@ export function sampleResume(): Resume {
       { category: '工具', items: ['Figma', 'SQL', 'Tableau', 'Jira'] },
       { category: '语言', items: ['中文（母语）', '英语（CET-6）'] },
     ],
+    custom: [],
+    layout: defaultLayout([]),
   }
 }

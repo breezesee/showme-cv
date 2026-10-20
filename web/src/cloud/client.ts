@@ -1,9 +1,16 @@
+import { photoUrl } from '../model/photo'
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? ''
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? ''
 const REF = SUPABASE_URL.match(/\/\/([^.]+)\./)?.[1] ?? ''
 
 export function cloudConfigured(): boolean {
   return SUPABASE_URL !== '' && SUPABASE_KEY !== ''
+}
+
+/** 照片公开 URL：每次读取当前环境，便于测试替换部署地址 */
+export function photoPublicUrl(path: string): string {
+  return photoUrl(import.meta.env.VITE_SUPABASE_URL ?? '', path)
 }
 
 export function hasStoredSession(): boolean {
