@@ -102,6 +102,12 @@ describe('模板渲染：自定义模块与板块布局', () => {
     expect(flows.main.indexOf('工作经历')).toBeLessThan(flows.main.indexOf('荣誉奖项'))
   })
 
+  it.each<TemplateId>(['classic', 'air', 'duo'])('%s 自定义模块整体不可拆分，短模块不与其标题分离', (id) => {
+    expect(buildTemplate(id, resume).flows.main).toMatch(
+      /<section data-avoid><h2 data-u data-keep>荣誉奖项<\/h2>/,
+    )
+  })
+
   it('自定义模块标题被转义，空标题只渲染正文', () => {
     const data = normalizeResume({
       custom: [{ id: 'x', title: '<b>标题</b>', body: '正文' }, { id: 'y', title: '', body: '无标题正文' }],

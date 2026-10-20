@@ -87,7 +87,7 @@ SM.mount(function (d) {
     var body = c ? SM.rich(c.body) : '';
     if (!body) return '';
     var title = has(c.title) ? '<h2 data-u data-keep>' + esc(c.title) + '</h2>' : '';
-    return '<section>' + title + body + '</section>';
+    return '<section data-avoid>' + title + body + '</section>';
   }
 
   var html = '';
