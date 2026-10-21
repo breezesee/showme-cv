@@ -16,11 +16,21 @@ export interface AdminUserSummary {
   lastResumeUpdate?: string | null
 }
 
+export type AdminUserFilter = 'all' | 'banned' | 'no_resume7d' | 'inactive7d'
+
+export interface AdminAttention {
+  banned: number
+  noResume7d: number
+  inactive7d: number
+}
+
 export interface AdminOverviewData {
   users: { total: number; new7d: number; active7d: number }
-  resumes: { total: number; new7d: number; updated7d: number }
+  resumes: { total: number; new7d: number; updated7d: number; usersWithResume: number }
+  attention: AdminAttention
   daily: { users: DailyPoint[]; resumes: DailyPoint[] }
   recentUsers: AdminUserSummary[]
+  activeUsers: AdminUserSummary[]
 }
 
 export interface AdminSearchResult {

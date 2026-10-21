@@ -5,6 +5,7 @@ import { useResume } from '../store/useResume'
 import Icon from './Icon.vue'
 
 /** 投递前检查：本地规则即时计算，不读取或上传简历之外的数据 */
+defineProps<{ compact?: boolean }>()
 const emit = defineEmits<{ 'edit-target': [target: string] }>()
 const { resume } = useResume()
 
@@ -43,8 +44,8 @@ function go(issue: CheckIssue): void {
 </script>
 
 <template>
-  <section class="card block">
-    <header class="zone-head">
+  <section :class="compact ? 'check-compact' : 'card block'">
+    <header v-if="!compact" class="zone-head">
       <h3>投递前检查</h3>
       <p class="hint">在本地完成，不上传简历内容。</p>
     </header>
@@ -81,6 +82,7 @@ function go(issue: CheckIssue): void {
 
 <style scoped>
 .block { padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 12px; }
+.check-compact { display: flex; flex-direction: column; gap: 8px; }
 .zone-head { display: flex; flex-direction: column; gap: 2px; }
 .zone-head h3 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: 0.2px; }
 .zone-head .hint { margin: 0; }

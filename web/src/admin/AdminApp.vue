@@ -11,6 +11,7 @@ import { authErrorMessage } from '../cloud/authErrors'
 import { cloudConfigured, getClient } from '../cloud/client'
 import { readAdminIdentity, type AdminIdentity } from './adminAuth'
 import { formatDate } from './adminFormat'
+import type { AdminUserFilter } from './adminTypes'
 
 type Phase = 'boot' | 'signed-out' | 'denied' | 'error' | 'ready'
 type Tab = 'overview' | 'users'
@@ -23,6 +24,7 @@ const deniedEmail = ref('')
 const identity = ref<AdminIdentity | null>(null)
 const tab = ref<Tab>('overview')
 const focusUserId = ref('')
+const userFilter = ref<AdminUserFilter>('all')
 const today = formatDate(new Date())
 
 /** 管理台挂在 /admin，返回编辑器时要回到站点根目录；子路径部署同样适用 */
@@ -105,6 +107,7 @@ async function leave(): Promise<void> {
   loginError.value = ''
   tab.value = 'overview'
   focusUserId.value = ''
+  userFilter.value = 'all'
   phase.value = 'signed-out'
 }
 
@@ -114,7 +117,14 @@ function switchTab(next: Tab): void {
 }
 
 function openUser(id: string): void {
+  userFilter.value = 'all'
   focusUserId.value = id
+  tab.value = 'users'
+}
+
+function openUsers(filter: AdminUserFilter): void {
+  userFilter.value = filter
+  focusUserId.value = ''
   tab.value = 'users'
 }
 
@@ -228,9 +238,10 @@ onMounted(boot)
         </header>
 
         <KeepAlive>
-          <AdminOverview v-if="tab === 'overview'" @open-user="openUser" />
+          <AdminOverview v-if="tab === 'overview'" @open-user="openUser" @open-users="openUsers" />
           <AdminUsers
             v-else
+            v-model:filter="userFilter"
             :current-user-id="identity?.id ?? ''"
             :focus-user-id="focusUserId"
             @focus-consumed="focusUserId = ''"

@@ -50,7 +50,8 @@ describe('parseOverview', () => {
   it('解析指标、14 天序列与最近用户', () => {
     const parsed = parseOverview({
       users: { total: 7, new7d: 3, active7d: 5 },
-      resumes: { total: 4, new7d: 2, updated7d: 4 },
+      resumes: { total: 4, new7d: 2, updated7d: 4, usersWithResume: 3 },
+      attention: { banned: 1, noResume7d: 2, inactive7d: 3 },
       daily: {
         users: [{ date: '10-08', count: 0 }, { date: '10-09', count: 2 }],
         resumes: [{ date: '10-08', count: 1 }],
@@ -59,9 +60,22 @@ describe('parseOverview', () => {
         { id: 'u-1', email: 'a@example.com', createdAt: '2026-10-20T00:00:00Z', lastSignInAt: null, resumeCount: 2 },
         { id: '', email: 'bad' },
       ],
+      activeUsers: [
+        {
+          id: 'u-2',
+          email: 'b@example.com',
+          createdAt: '2026-10-01T00:00:00Z',
+          lastSignInAt: '2026-10-21T03:00:00Z',
+          bannedUntil: null,
+          isAdmin: false,
+          resumeCount: 1,
+          lastResumeUpdate: '2026-10-21T04:00:00Z',
+        },
+      ],
     })
     expect(parsed.users).toEqual({ total: 7, new7d: 3, active7d: 5 })
-    expect(parsed.resumes).toEqual({ total: 4, new7d: 2, updated7d: 4 })
+    expect(parsed.resumes).toEqual({ total: 4, new7d: 2, updated7d: 4, usersWithResume: 3 })
+    expect(parsed.attention).toEqual({ banned: 1, noResume7d: 2, inactive7d: 3 })
     expect(parsed.daily.users).toEqual([{ date: '10-08', count: 0 }, { date: '10-09', count: 2 }])
     expect(parsed.daily.resumes).toEqual([{ date: '10-08', count: 1 }])
     expect(parsed.recentUsers).toEqual([
@@ -76,13 +90,28 @@ describe('parseOverview', () => {
         lastResumeUpdate: null,
       },
     ])
+    expect(parsed.activeUsers).toEqual([
+      {
+        id: 'u-2',
+        email: 'b@example.com',
+        createdAt: '2026-10-01T00:00:00Z',
+        lastSignInAt: '2026-10-21T03:00:00Z',
+        bannedUntil: null,
+        isAdmin: false,
+        resumeCount: 1,
+        lastResumeUpdate: '2026-10-21T04:00:00Z',
+      },
+    ])
   })
 
   it('缺省的可选部分回落为空数组', () => {
     const parsed = parseOverview({ users: {}, resumes: {} })
     expect(parsed.users).toEqual({ total: 0, new7d: 0, active7d: 0 })
+    expect(parsed.resumes).toEqual({ total: 0, new7d: 0, updated7d: 0, usersWithResume: 0 })
+    expect(parsed.attention).toEqual({ banned: 0, noResume7d: 0, inactive7d: 0 })
     expect(parsed.daily).toEqual({ users: [], resumes: [] })
     expect(parsed.recentUsers).toEqual([])
+    expect(parsed.activeUsers).toEqual([])
   })
 
   it('结构非法时抛 AdminDataError', () => {

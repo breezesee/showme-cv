@@ -69,6 +69,29 @@ function onTtlKeydown(e: KeyboardEvent): void {
   moveChoice(e, ttlGroup.value, SHORT_LINK_TTLS, ttl.value, (value) => (ttl.value = value))
 }
 
+// ---------- 面板分区：分享链接 / 导出文件 / 备份与导入 ----------
+const TABS = [
+  { id: 'link', label: '分享链接' },
+  { id: 'export', label: '导出文件' },
+  { id: 'backup', label: '备份与导入' },
+] as const
+type TabId = (typeof TABS)[number]['id']
+
+const tab = ref<TabId>('link')
+const tabGroup = ref<HTMLElement>()
+const settingsOpen = ref(false)
+const qrOpen = ref(false)
+const settingsSummary = computed(() => `${permission.value === 'view' ? '仅查看' : '可编辑'} · ${ttl.value} 天有效`)
+
+function onTabKeydown(e: KeyboardEvent): void {
+  if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
+  e.preventDefault()
+  const index = TABS.findIndex((item) => item.id === tab.value)
+  const next = (index + (e.key === 'ArrowRight' ? 1 : -1) + TABS.length) % TABS.length
+  tab.value = TABS[next]!.id
+  void nextTick(() => (tabGroup.value?.children[next] as HTMLElement | undefined)?.focus())
+}
+
 const current = computed(() => plainResume(resume.value))
 /** 发送时的外观也随简历接力，接收方看到的就是你这边的排版与配色 */
 const look = computed<RelayLook>(() => ({ templateId: templateId.value, themeId: themeId.value }))
@@ -108,6 +131,11 @@ async function showLink(link: RecentLink): Promise<void> {
   }
 }
 
+async function pickRecent(link: RecentLink): Promise<void> {
+  qrOpen.value = true
+  await showLink(link)
+}
+
 onMounted(() => {
   recent.value = loadRecentLinks()
   const latest = recent.value[0]
@@ -135,6 +163,7 @@ async function generate(): Promise<void> {
     }
     recent.value = addRecentLink(record)
     await showLink(record)
+    settingsOpen.value = false
   } catch (e) {
     generated.value = null
     failure.value = e instanceof CloudRelayError ? e.message : '未知错误'
@@ -234,122 +263,164 @@ async function runExport(kind: Exclude<ExportKind, 'print'>): Promise<void> {
 
     <p class="hint share-note">分享和导出的都是你现在看到的内容，包括还没保存的修改。</p>
 
-    <!-- 分享：先选用途，再生成链接 -->
-    <section class="card block">
-      <header class="zone-head">
-        <h3>分享</h3>
-        <p class="hint">链接经过加密，只有拿到链接的人能打开；ShowMe 看不到你的简历内容。</p>
-      </header>
+    <div ref="tabGroup" class="tabs" role="tablist" aria-label="分享、导出与备份">
+      <button
+        v-for="item in TABS"
+        :id="`share-tab-${item.id}`"
+        :key="item.id"
+        class="tab"
+        :class="{ active: tab === item.id }"
+        type="button"
+        role="tab"
+        :aria-selected="tab === item.id"
+        :aria-controls="`share-panel-${item.id}`"
+        :tabindex="tab === item.id ? 0 : -1"
+        @click="tab = item.id"
+        @keydown="onTabKeydown"
+      >
+        {{ item.label }}
+      </button>
+    </div>
 
-      <div ref="intentGroup" class="intents" role="radiogroup" aria-label="分享用途" @keydown="onIntentKeydown">
-        <button
-          v-for="opt in INTENTS"
-          :key="opt.id"
-          class="intent"
-          :class="{ active: permission === opt.id }"
-          type="button"
-          role="radio"
-          :aria-checked="permission === opt.id"
-          :tabindex="permission === opt.id ? 0 : -1"
-          @click="permission = opt.id"
-        >
-          <span class="intent-label">{{ opt.label }}</span>
-          <span class="intent-hint">{{ opt.hint }}</span>
+    <!-- 分享链接：设置默认收起，只保留生成与发送 -->
+    <section v-show="tab === 'link'" id="share-panel-link" class="tab-panel" role="tabpanel" aria-labelledby="share-tab-link">
+      <div class="settings">
+        <button class="settings-summary" type="button" :aria-expanded="settingsOpen" @click="settingsOpen = !settingsOpen">
+          <span class="settings-current">{{ settingsSummary }}</span>
+          <span class="settings-change">{{ settingsOpen ? '收起' : '修改' }}</span>
         </button>
+        <div v-if="settingsOpen" class="settings-body">
+          <div ref="intentGroup" class="intents" role="radiogroup" aria-label="分享用途" @keydown="onIntentKeydown">
+            <button
+              v-for="opt in INTENTS"
+              :key="opt.id"
+              class="intent"
+              :class="{ active: permission === opt.id }"
+              type="button"
+              role="radio"
+              :aria-checked="permission === opt.id"
+              :tabindex="permission === opt.id ? 0 : -1"
+              @click="permission = opt.id"
+            >
+              <span class="intent-label">{{ opt.label }}</span>
+              <span class="intent-hint">{{ opt.hint }}</span>
+            </button>
+          </div>
+
+          <div class="ttl-row">
+            <span class="field-label">链接有效期</span>
+            <div ref="ttlGroup" class="ttl" role="radiogroup" aria-label="链接有效期" @keydown="onTtlKeydown">
+              <button
+                v-for="days in SHORT_LINK_TTLS"
+                :key="days"
+                class="ttl-item"
+                :class="{ active: ttl === days }"
+                type="button"
+                role="radio"
+                :aria-checked="ttl === days"
+                :tabindex="ttl === days ? 0 : -1"
+                @click="ttl = days"
+              >
+                {{ days }} 天
+              </button>
+            </div>
+            <span class="hint">生成后可随时让它提前失效</span>
+          </div>
+        </div>
       </div>
 
-      <div class="ttl-row">
-        <span class="field-label">链接有效期</span>
-        <div ref="ttlGroup" class="ttl" role="radiogroup" aria-label="链接有效期" @keydown="onTtlKeydown">
-          <button
-            v-for="days in SHORT_LINK_TTLS"
-            :key="days"
-            class="ttl-item"
-            :class="{ active: ttl === days }"
-            type="button"
-            role="radio"
-            :aria-checked="ttl === days"
-            :tabindex="ttl === days ? 0 : -1"
-            @click="ttl = days"
-          >
-            {{ days }} 天
-          </button>
-        </div>
-        <span class="hint">生成后可随时让它提前失效</span>
-      </div>
+      <p class="hint">链接经过加密，只有拿到链接的人能打开；ShowMe 看不到你的简历内容。</p>
 
       <p v-if="!canEncrypt" class="notice">
         当前访问地址不是 https，浏览器无法加密，不能生成二维码。请通过 https 网址访问，或改用下方的离线长链接。
       </p>
 
-      <div v-else class="share-main">
-        <div class="stage">
-          <img
-            v-if="generated"
-            class="qr"
-            :class="{ faded: stale }"
-            :src="generated.qr"
-            alt="短链接二维码"
-            width="168"
-            height="168"
-          />
-          <div v-else class="qr-blank" aria-hidden="true"><Icon name="qr" /></div>
+      <template v-else>
+        <div class="share-main">
+          <div class="stage" :class="{ open: qrOpen }">
+            <img
+              v-if="generated"
+              class="qr"
+              :class="{ faded: stale }"
+              :src="generated.qr"
+              alt="短链接二维码"
+              width="168"
+              height="168"
+            />
+            <div v-else class="qr-blank" aria-hidden="true"><Icon name="qr" /></div>
+          </div>
+
+          <div class="share-side">
+            <template v-if="generated">
+              <!-- 不用输入框：iOS 聚焦小字号输入框会自动放大页面 -->
+              <div class="capsule">
+                <span class="link" aria-label="短链接" :title="generated.url">{{ generated.url }}</span>
+                <button class="icon-btn" type="button" aria-label="复制短链接" @click="copyLink(generated.url)">
+                  <Icon name="copy" />
+                </button>
+              </div>
+              <p class="badges">
+                <span v-if="stale" class="badge warn">链接仍是旧内容</span>
+                <span class="badge">{{ generated.permission === 'view' ? '仅查看' : '可编辑' }}</span>
+                <span class="badge">
+                  {{ stale ? '生成新链接后生效' : `${generated.ttlDays} 天内有效 · 至 ${expiresLabel(generated.expiresAt)}` }}
+                </span>
+              </p>
+              <p v-if="stale" class="stale-note">简历或设置已修改，接收方目前看到的还是旧版本。</p>
+              <div class="actions">
+                <button v-if="stale" class="btn btn-primary" type="button" :disabled="busy" @click="generate">
+                  <Icon name="qr" />{{ busy ? '生成中…' : '生成新链接' }}
+                </button>
+                <template v-else>
+                  <button v-if="canShare" class="btn btn-primary" type="button" @click="shareLink(generated.url)">
+                    <Icon name="send" />发送到…
+                  </button>
+                  <button class="btn" :class="{ 'btn-primary': !canShare }" type="button" @click="copyLink(generated.url)">
+                    <Icon name="copy" />复制链接
+                  </button>
+                </template>
+              </div>
+              <div class="minor-actions">
+                <button v-if="!stale" class="text-btn" type="button" :disabled="busy" @click="generate">
+                  <Icon name="qr" />{{ busy ? '生成中…' : '重新生成' }}
+                </button>
+                <button class="text-btn danger" type="button" :disabled="!!revokingId" @click="revoke(generated)">
+                  <Icon name="trash" />{{ revokingId === generated.id ? '撤销中…' : '立即失效' }}
+                </button>
+              </div>
+            </template>
+            <template v-else>
+              <p class="hint">
+                生成后，扫码或打开链接即可{{ permission === 'view' ? '查看' : '导入编辑' }}这份简历，电脑手机互传都行。
+              </p>
+              <div class="actions">
+                <button class="btn btn-primary" type="button" :disabled="busy" @click="generate">
+                  <Icon name="qr" />{{ busy ? '生成中…' : '生成链接与二维码' }}
+                </button>
+              </div>
+            </template>
+            <p v-if="failure" class="notice">生成失败：{{ failure }}</p>
+          </div>
         </div>
 
-        <div class="share-side">
-          <template v-if="generated">
-            <!-- 不用输入框：iOS 聚焦小字号输入框会自动放大页面 -->
-            <div class="capsule">
-              <span class="link" aria-label="短链接" :title="generated.url">{{ generated.url }}</span>
-              <button class="icon-btn" type="button" aria-label="复制短链接" @click="copyLink(generated.url)">
-                <Icon name="copy" />
-              </button>
-            </div>
-            <p class="badges">
-              <span v-if="stale" class="badge warn">简历或设置已修改</span>
-              <span class="badge">{{ generated.permission === 'view' ? '仅查看' : '可编辑' }}</span>
-              <span class="badge">
-                {{ stale ? '重新生成后生效' : `${generated.ttlDays} 天内有效 · 至 ${expiresLabel(generated.expiresAt)}` }}
-              </span>
-            </p>
-            <div class="actions">
-              <button v-if="canShare" class="btn" type="button" @click="shareLink(generated.url)">
-                <Icon name="send" />发送到…
-              </button>
-              <button class="btn" :class="{ 'btn-primary': stale }" type="button" :disabled="busy" @click="generate">
-                <Icon name="qr" />{{ busy ? '生成中…' : '重新生成' }}
-              </button>
-              <button
-                class="btn btn-danger"
-                type="button"
-                :disabled="!!revokingId"
-                @click="revoke(generated)"
-              >
-                <Icon name="trash" />{{ revokingId === generated.id ? '撤销中…' : '立即失效' }}
-              </button>
-            </div>
-          </template>
-          <template v-else>
-            <p class="hint">
-              生成后，扫码或打开链接即可{{ permission === 'view' ? '查看' : '导入编辑' }}这份简历，电脑手机互传都行。
-            </p>
-            <div class="actions">
-              <button class="btn btn-primary" type="button" :disabled="busy" @click="generate">
-                <Icon name="qr" />{{ busy ? '生成中…' : '生成链接与二维码' }}
-              </button>
-            </div>
-          </template>
-          <p v-if="failure" class="notice">生成失败：{{ failure }}</p>
-        </div>
-      </div>
+        <button
+          v-if="generated"
+          class="text-btn qr-toggle"
+          type="button"
+          :aria-expanded="qrOpen"
+          @click="qrOpen = !qrOpen"
+        >
+          <Icon name="qr" />{{ qrOpen ? '收起二维码' : '显示二维码' }}
+        </button>
+      </template>
 
       <ul class="hint directions">
         <li><b>电脑 → 手机</b>：手机相机扫电脑屏幕上的码。</li>
         <li><b>手机 → 电脑</b>：复制链接或发到微信、QQ，在电脑打开。</li>
       </ul>
 
-      <div v-if="recent.length" class="recent">
-        <h4>最近生成的链接</h4>
+      <details v-if="recent.length" class="more recent-more">
+        <summary>最近生成的链接（{{ recent.length }}）</summary>
         <ul class="recent-list">
           <li
             v-for="item in recent"
@@ -365,7 +436,7 @@ async function runExport(kind: Exclude<ExportKind, 'print'>): Promise<void> {
               </span>
             </div>
             <div class="recent-actions">
-              <button class="icon-btn" type="button" aria-label="显示二维码" @click="showLink(item)">
+              <button class="icon-btn" type="button" aria-label="显示二维码" @click="pickRecent(item)">
                 <Icon name="qr" />
               </button>
               <button class="icon-btn" type="button" aria-label="复制链接" @click="copyLink(item.url)">
@@ -383,7 +454,7 @@ async function runExport(kind: Exclude<ExportKind, 'print'>): Promise<void> {
             </div>
           </li>
         </ul>
-      </div>
+      </details>
 
       <details v-if="!hasLocalPhoto" class="more">
         <summary>更多方式：备用长链接</summary>
@@ -403,14 +474,10 @@ async function runExport(kind: Exclude<ExportKind, 'print'>): Promise<void> {
       </p>
     </section>
 
-    <ResumeCheckPanel @edit-target="emit('edit-target', $event)" />
-
-    <!-- 导出：文件到本机 -->
-    <section class="card block">
-      <header class="zone-head">
-        <h3>导出</h3>
-        <p class="hint">投递用第一个；需要视觉版或继续编辑时再选其他格式。</p>
-      </header>
+    <!-- 导出文件：检查 + 投递版 PDF，其余格式折叠 -->
+    <section v-show="tab === 'export'" id="share-panel-export" class="tab-panel" role="tabpanel" aria-labelledby="share-tab-export">
+      <p class="hint panel-lead">投递优先用 PDF；需要视觉版或继续编辑时再选其他格式。</p>
+      <ResumeCheckPanel compact @edit-target="emit('edit-target', $event)" />
       <div class="exports">
         <button class="export-row primary" type="button" @click="exportDeliverable">
           <span class="export-text">
@@ -419,40 +486,46 @@ async function runExport(kind: Exclude<ExportKind, 'print'>): Promise<void> {
           </span>
           <span class="ext">.pdf</span>
         </button>
-        <button class="export-row" type="button" :disabled="!!exporting" @click="runExport('pdf')">
-          <span class="export-text">
-            <b>设计版 PDF</b>
-            <small>与预览完全一致的视觉版，文字不可选中</small>
-          </span>
-          <span v-if="exporting === 'pdf'" class="spinner" role="status" aria-label="正在导出设计版 PDF" />
-          <span v-else class="ext">.pdf</span>
-        </button>
-        <button class="export-row" type="button" :disabled="!!exporting" @click="runExport('word')">
-          <span class="export-text">
-            <b>Word</b>
-            <small>可编辑，适合继续修改后投递</small>
-          </span>
-          <span v-if="exporting === 'word'" class="spinner" role="status" aria-label="正在导出 Word" />
-          <span v-else class="ext">.docx</span>
-        </button>
-        <button class="export-row" type="button" @click="exportCurrent">
-          <span class="export-text">
-            <b>备份文件</b>
-            <small>换设备或重装时可导入恢复</small>
-          </span>
-          <span class="ext">.json</span>
-        </button>
+        <details class="more other-formats">
+          <summary>其他格式</summary>
+          <button class="export-row" type="button" :disabled="!!exporting" @click="runExport('pdf')">
+            <span class="export-text">
+              <b>设计版 PDF</b>
+              <small>与预览完全一致的视觉版，文字不可选中</small>
+            </span>
+            <span v-if="exporting === 'pdf'" class="spinner" role="status" aria-label="正在导出设计版 PDF" />
+            <span v-else class="ext">.pdf</span>
+          </button>
+          <button class="export-row" type="button" :disabled="!!exporting" @click="runExport('word')">
+            <span class="export-text">
+              <b>Word</b>
+              <small>可编辑，适合继续修改后投递</small>
+            </span>
+            <span v-if="exporting === 'word'" class="spinner" role="status" aria-label="正在导出 Word" />
+            <span v-else class="ext">.docx</span>
+          </button>
+        </details>
       </div>
     </section>
 
-    <!-- 导入：JSON 备份或已有的简历文字 -->
-    <section class="card block">
-      <header class="zone-head">
-        <h3>导入</h3>
-        <p class="hint">从备份文件或已有的简历文字导入；确认内容后再保存。</p>
-      </header>
-      <div class="actions">
-        <button class="btn" type="button" @click="importFromFile"><Icon name="upload" />导入备份</button>
+    <!-- 备份与导入：都在本机完成 -->
+    <section v-show="tab === 'backup'" id="share-panel-backup" class="tab-panel" role="tabpanel" aria-labelledby="share-tab-backup">
+      <p class="hint panel-lead">备份文件保存在你的设备上，换设备或重装时可导入恢复；也可以从已有简历的文字开始。</p>
+      <div class="exports">
+        <button class="export-row" type="button" @click="exportCurrent">
+          <span class="export-text">
+            <b>导出备份文件</b>
+            <small>保存到本机，之后可随时导入</small>
+          </span>
+          <span class="ext">.json</span>
+        </button>
+        <button class="export-row" type="button" @click="importFromFile">
+          <span class="export-text">
+            <b>导入备份</b>
+            <small>从 ShowMe 备份文件恢复简历</small>
+          </span>
+          <span class="ext">.json</span>
+        </button>
       </div>
       <details class="more paste-more">
         <summary>粘贴简历文字导入</summary>
@@ -463,13 +536,70 @@ async function runExport(kind: Exclude<ExportKind, 'print'>): Promise<void> {
 </template>
 
 <style scoped>
-.share { display: flex; flex-direction: column; gap: 16px; }
+.share { display: flex; flex-direction: column; gap: 14px; }
 .share > .notice { margin: 0; }
 .share-note { margin: 0; }
-.block { padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 12px; }
-.zone-head { display: flex; flex-direction: column; gap: 2px; }
-.zone-head h3 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: 0.2px; }
-.zone-head .hint { margin: 0; }
+
+/* 按任务分区：链接 / 导出 / 备份，避免一条长列表 */
+.tabs {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--fill);
+}
+.tab {
+  flex: 1;
+  min-height: 36px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s var(--ease), color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+.tab:hover { color: var(--ink); }
+.tab.active {
+  background: #fff;
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 10px rgba(0, 0, 0, 0.06);
+}
+.tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+.panel-lead { margin: 0; }
+
+/* 链接设置默认收起，只保留一句当前状态 */
+.settings { display: flex; flex-direction: column; gap: 10px; }
+.settings-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  text-align: left;
+  cursor: pointer;
+}
+.settings-current { font-size: 13.5px; font-weight: 600; }
+.settings-change { flex: none; color: var(--accent); font-size: 12.5px; font-weight: 500; }
+.settings-body { display: flex; flex-direction: column; gap: 12px; padding: 2px 2px 4px; }
 
 /* 分享用途：两张卡片，默认「仅查看」 */
 .intents { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -495,7 +625,13 @@ async function runExport(kind: Exclude<ExportKind, 'print'>): Promise<void> {
 .intent-label { font-size: 14px; font-weight: 600; }
 .intent-hint { color: var(--muted); font-size: 12px; line-height: 1.5; }
 @media (max-width: 560px) {
+  .tab-panel { padding: 14px; }
   .intents { grid-template-columns: 1fr; }
+  /* 手机上先给可发送的链接；二维码需要时再展开 */
+  .stage { display: none; }
+  .stage.open { display: block; }
+  .tab-panel .qr-toggle { display: inline-flex; }
+  .directions { display: none; }
 }
 
 /* 有效期：小号分段控件 */
@@ -610,13 +746,31 @@ async function runExport(kind: Exclude<ExportKind, 'print'>): Promise<void> {
 .badge.warn { background: var(--warning-bg); color: var(--warning); }
 
 .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.stale-note { margin: 0; color: #b25000; font-size: 12.5px; line-height: 1.55; }
+.minor-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.text-btn:hover { text-decoration: underline; }
+.text-btn:disabled { opacity: 0.45; cursor: default; text-decoration: none; }
+.text-btn.danger { color: var(--danger); }
+.text-btn svg { width: 15px; height: 15px; }
+.qr-toggle { display: none; align-self: flex-start; }
 
 .directions { margin: 0; padding-left: 18px; }
 .directions b { color: var(--ink); font-weight: 600; }
 
-/* 最近链接：保留 5 条，可再次显示二维码、复制或撤销 */
-.recent { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 6px; }
-.recent h4 { margin: 0; font-size: 13px; font-weight: 600; color: var(--muted); }
+/* 最近链接：默认折叠，需要时再找回旧链接 */
 .recent-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .recent-row {
   display: flex;
@@ -655,6 +809,8 @@ async function runExport(kind: Exclude<ExportKind, 'print'>): Promise<void> {
   width: fit-content;
 }
 .more[open] summary { margin-bottom: 8px; }
+.other-formats { border-top: 1px solid var(--line); padding-top: 10px; }
+.other-formats[open] { display: flex; flex-direction: column; gap: 8px; }
 
 /* 导出行：标题 + 一句话说明 + 扩展名徽标 */
 .exports { display: flex; flex-direction: column; gap: 8px; }

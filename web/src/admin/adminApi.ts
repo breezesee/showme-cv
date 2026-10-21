@@ -3,6 +3,7 @@ import type {
   AdminOverviewData,
   AdminSearchResult,
   AdminUserDetailData,
+  AdminUserFilter,
   AdminUserSummary,
   DailyPoint,
   RelayStats,
@@ -76,15 +77,23 @@ export function parseOverview(raw: unknown): AdminOverviewData {
   const { users, resumes } = raw
   if (!isRecord(users) || !isRecord(resumes)) throw new AdminDataError('总览指标缺失')
   const daily = isRecord(raw.daily) ? raw.daily : {}
+  const attention = isRecord(raw.attention) ? raw.attention : {}
   return {
     users: { total: count(users.total), new7d: count(users.new7d), active7d: count(users.active7d) },
     resumes: {
       total: count(resumes.total),
       new7d: count(resumes.new7d),
       updated7d: count(resumes.updated7d),
+      usersWithResume: count(resumes.usersWithResume),
+    },
+    attention: {
+      banned: count(attention.banned),
+      noResume7d: count(attention.noResume7d),
+      inactive7d: count(attention.inactive7d),
     },
     daily: { users: parseDaily(daily.users), resumes: parseDaily(daily.resumes) },
     recentUsers: parseUsers(raw.recentUsers),
+    activeUsers: parseUsers(raw.activeUsers),
   }
 }
 
@@ -212,11 +221,21 @@ export async function adminOverview(): Promise<AdminOverviewData> {
   return parseOverview(await callRpc('admin_overview'))
 }
 
-export async function adminSearchUsers(query: string, page: number, pageSize = 20): Promise<AdminSearchResult> {
+export async function adminSearchUsers(
+  query: string,
+  page: number,
+  pageSize = 20,
+  filter: AdminUserFilter = 'all',
+): Promise<AdminSearchResult> {
   const limit = Math.max(1, Math.min(100, Math.floor(pageSize) || 20))
   const offset = (Math.max(1, Math.floor(page) || 1) - 1) * limit
   return parseSearch(
-    await callRpc('admin_search_users', { p_query: query.trim(), p_limit: limit, p_offset: offset }),
+    await callRpc('admin_search_users', {
+      p_query: query.trim(),
+      p_limit: limit,
+      p_offset: offset,
+      p_filter: filter,
+    }),
   )
 }
 

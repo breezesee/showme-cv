@@ -15,13 +15,19 @@ import {
   pageCount,
 } from './adminApi'
 import { banState, formatDateTime, formatNumber, formatRelative } from './adminFormat'
-import type { AdminSearchResult, AdminUserDetailData } from './adminTypes'
+import type { AdminSearchResult, AdminUserDetailData, AdminUserFilter } from './adminTypes'
 import AdminUserDetail from './AdminUserDetail.vue'
 
-const props = defineProps<{ currentUserId: string; focusUserId?: string }>()
-const emit = defineEmits<{ 'focus-consumed': [] }>()
+const props = defineProps<{ currentUserId: string; focusUserId?: string; filter: AdminUserFilter }>()
+const emit = defineEmits<{ 'focus-consumed': []; 'update:filter': [value: AdminUserFilter] }>()
 
 const PAGE_SIZE = 20
+const FILTERS: { id: AdminUserFilter; label: string }[] = [
+  { id: 'all', label: '全部' },
+  { id: 'banned', label: '已禁用' },
+  { id: 'no_resume7d', label: '7 天未建简历' },
+  { id: 'inactive7d', label: '7 天未登录' },
+]
 
 const query = ref('')
 const applied = ref('')
@@ -38,9 +44,13 @@ const detailError = ref('')
 const actionBusy = ref(false)
 
 const totalPages = computed(() => pageCount(result.value?.total ?? 0, PAGE_SIZE))
+const filterLabel = computed(() => FILTERS.find((item) => item.id === props.filter)?.label ?? '全部')
 const summary = computed(() => {
   if (!result.value) return loading.value ? '正在读取用户' : ''
   const scope = applied.value ? `，匹配「${applied.value}」` : ''
+  if (props.filter !== 'all') {
+    return `「${filterLabel.value}」共 ${formatNumber(result.value.total)} 位用户${scope}`
+  }
   return `共 ${formatNumber(result.value.total)} 位用户${scope}`
 })
 
@@ -52,7 +62,7 @@ async function load(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    const data = await adminSearchUsers(applied.value, page.value, PAGE_SIZE)
+    const data = await adminSearchUsers(applied.value, page.value, PAGE_SIZE, props.filter)
     if (my !== listSeq) return
     result.value = data
     const max = pageCount(data.total, PAGE_SIZE)
@@ -81,6 +91,12 @@ function clearSearch(): void {
   applied.value = ''
   page.value = 1
   void load()
+}
+
+function setFilter(next: AdminUserFilter): void {
+  if (props.filter === next) return
+  page.value = 1
+  emit('update:filter', next)
 }
 
 function go(next: number): void {
@@ -192,16 +208,27 @@ watch(
   () => props.focusUserId,
   (id) => {
     if (!id) return
-    if (query.value || applied.value || page.value !== 1) {
-      query.value = ''
-      applied.value = ''
-      page.value = 1
+    const mustReload = query.value !== '' || applied.value !== '' || page.value !== 1
+    query.value = ''
+    applied.value = ''
+    page.value = 1
+    if (props.filter !== 'all') {
+      emit('update:filter', 'all')
+    } else if (mustReload) {
       void load()
     }
     void openUser(id)
     emit('focus-consumed')
   },
   { immediate: true },
+)
+
+watch(
+  () => props.filter,
+  () => {
+    page.value = 1
+    void load()
+  },
 )
 
 watch(detailOpen, (open) => {
@@ -246,6 +273,20 @@ onMounted(load)
       <button v-if="applied" class="btn btn-plain" type="button" @click="clearSearch">清除</button>
     </form>
 
+    <div class="adm-filters" role="group" aria-label="筛选用户">
+      <button
+        v-for="item in FILTERS"
+        :key="item.id"
+        class="adm-filter"
+        :class="{ active: filter === item.id }"
+        type="button"
+        :aria-pressed="filter === item.id"
+        @click="setFilter(item.id)"
+      >
+        {{ item.label }}
+      </button>
+    </div>
+
     <div class="adm-table-wrap">
       <table v-if="result?.users.length" class="adm-table">
         <thead>
@@ -288,7 +329,7 @@ onMounted(load)
       </p>
       <p v-else-if="loading" class="adm-table-state">正在读取用户…</p>
       <p v-else-if="!result?.users.length" class="adm-table-state">
-        {{ applied ? '没有找到匹配的用户' : '还没有用户' }}
+        {{ applied ? '没有找到匹配的用户' : filter !== 'all' ? `没有${filterLabel}的用户` : '还没有用户' }}
       </p>
     </div>
 

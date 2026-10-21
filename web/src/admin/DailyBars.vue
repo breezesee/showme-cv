@@ -26,7 +26,7 @@ function barHeight(count: number): string {
     <header class="adm-card-head">
       <div>
         <h3>{{ title }}</h3>
-        <p class="adm-card-note">近 14 天 · 共 {{ formatNumber(total) }} {{ unit }}</p>
+        <p class="adm-card-note">近 14 天新增 {{ formatNumber(total) }} {{ unit }}</p>
       </div>
       <span class="adm-chart-peak">峰值 {{ peak }}</span>
     </header>
