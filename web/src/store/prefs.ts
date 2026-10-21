@@ -6,6 +6,7 @@ import { storage } from './storage'
 const TEMPLATE_KEY = 'showme.template'
 const THEME_KEY = 'showme.theme'
 const ZOOM_KEY = 'showme.previewZoom'
+const ONBOARDED_KEY = 'showme.onboarded'
 
 export function loadTemplatePref(): TemplateId {
   const v = storage.get(TEMPLATE_KEY)
@@ -40,4 +41,13 @@ export function loadZoomPref(): PreviewZoom | null {
 
 export function saveZoomPref(v: PreviewZoom): void {
   storage.set(ZOOM_KEY, v)
+}
+
+/** 首次进入的「空白 / 示例」选择是否已经问过 */
+export function loadOnboardedPref(): boolean {
+  return storage.get(ONBOARDED_KEY) === '1'
+}
+
+export function saveOnboardedPref(): void {
+  storage.set(ONBOARDED_KEY, '1')
 }

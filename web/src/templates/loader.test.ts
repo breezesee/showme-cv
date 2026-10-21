@@ -50,6 +50,13 @@ describe('renderPayload：照片公开地址', () => {
     }
   })
 
+  it('本地 data URL 照片直接作为 photoURL，不依赖环境地址', () => {
+    const dataUrl = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ=='
+    const resume = sampleResume()
+    resume.basics.photo = dataUrl
+    expect(renderPayload(resume).photoURL).toBe(dataUrl)
+  })
+
   it('没有照片时不产生 photoURL', () => {
     expect(renderPayload(sampleResume()).photoURL).toBeUndefined()
   })

@@ -26,8 +26,9 @@ import type { ThemeId } from '../templates/themes'
 import { confirmDialog } from '../ui/confirm'
 import { showToast } from '../ui/toast'
 import { loadLocalDocName, saveLocalDocName } from './localDoc'
-import { loadTemplatePref, loadThemePref, saveTemplatePref, saveThemePref } from './prefs'
-import { cleanResumeName, suggestResumeName } from './resumeName'
+import { loadOnboardedPref, loadTemplatePref, loadThemePref, saveOnboardedPref, saveTemplatePref, saveThemePref } from './prefs'
+import { clearRecoveryDraft, readRecoveryDraft, writeRecoveryDraft, type RecoveryDraft } from './recovery'
+import { cleanResumeName, suggestCopyName, suggestResumeName } from './resumeName'
 import { LocalResumeStore, type LoadStatus } from './ResumeStore'
 
 /**
@@ -64,6 +65,11 @@ const library = ref<ResumeMeta[]>([])
 const libraryLoading = ref(false)
 const libraryError = ref('')
 const openingId = ref('')
+
+/** 上次未保存的本地草稿；启动时读取一次，恢复或忽略后清空 */
+const recoveryDraft = ref<RecoveryDraft | null>(readRecoveryDraft())
+/** 首次进入：空白 / 示例二选一 */
+const onboarding = ref(false)
 
 /** 邮件里的重置密码链接：打开全屏设置新密码；失败时保留错误原因 */
 const recoveryActive = ref(false)
@@ -153,6 +159,47 @@ function confirmDiscard(action: string): Promise<boolean> {
   })
 }
 
+/** 清除本地恢复草稿（保存成功、登录、新建、打开、导入时调用） */
+function dropRecoveryDraft(): void {
+  window.clearTimeout(recoveryTimer)
+  recoveryDraft.value = null
+  clearRecoveryDraft()
+}
+
+function flushRecoveryDraft(): void {
+  if (account.ready || !dirty.value) return
+  writeRecoveryDraft({
+    resume: resume.value,
+    templateId: templateId.value,
+    themeId: themeId.value,
+    docName: docName.value,
+    at: Date.now(),
+  })
+}
+
+let recoveryTimer: number | undefined
+
+/** 恢复上次未保存的草稿：作为未保存内容载入，不覆盖已保存版本 */
+export function restoreRecovery(): void {
+  const draft = recoveryDraft.value
+  if (!draft) return
+  resume.value = normalizeResume(draft.resume)
+  templateId.value = draft.templateId
+  themeId.value = draft.themeId
+  docName.value = draft.docName
+  docId.value = null
+  docUpdatedAt.value = null
+  savedAt.value = null
+  lastScope.value = ''
+  // 基线保持不变：恢复内容仍显示为「未保存」，由用户确认后手动保存
+  dropRecoveryDraft()
+  showToast('已恢复上次未保存的修改，确认后请点击「保存」', 'success', 5000)
+}
+
+export function dismissRecovery(): void {
+  dropRecoveryDraft()
+}
+
 function applyLoadedDoc(stored: StoredResume): void {
   const normalized = normalizeResume(stored.data)
   resume.value = normalized
@@ -163,6 +210,7 @@ function applyLoadedDoc(stored: StoredResume): void {
   const at = Date.parse(stored.meta.updatedAt)
   savedAt.value = Number.isFinite(at) ? at : Date.now()
   lastScope.value = 'cloud'
+  dropRecoveryDraft()
 }
 
 export interface SaveOutcome {
@@ -187,6 +235,7 @@ export async function saveCurrent(rawName = ''): Promise<SaveOutcome> {
       baseline.value = snapshot(data)
       savedAt.value = Date.now()
       lastScope.value = 'local'
+      dropRecoveryDraft()
       return { scope: 'local', name }
     }
 
@@ -199,6 +248,7 @@ export async function saveCurrent(rawName = ''): Promise<SaveOutcome> {
     const at = Date.parse(meta.updatedAt)
     savedAt.value = Number.isFinite(at) ? at : Date.now()
     lastScope.value = 'cloud'
+    dropRecoveryDraft()
     await refreshLibrary()
     return { scope: 'cloud', name: meta.name }
   } catch (e) {
@@ -240,6 +290,7 @@ export async function createNewDocument(): Promise<boolean> {
   docUpdatedAt.value = null
   savedAt.value = null
   lastScope.value = ''
+  dropRecoveryDraft()
   return true
 }
 
@@ -272,12 +323,28 @@ export async function deleteLibraryDoc(meta: ResumeMeta): Promise<boolean> {
   }
 }
 
+/** 复制一份云端简历：不切换当前编辑；名称按「（副本）」规则去重 */
+export async function duplicateLibraryDoc(meta: ResumeMeta): Promise<boolean> {
+  try {
+    const stored = await (await getLibrary()).get(meta.id)
+    const name = suggestCopyName(meta.name, library.value.map((doc) => doc.name))
+    await (await getLibrary()).create(name, stored.data)
+    await refreshLibrary()
+    showToast(`已创建「${name}」`, 'success')
+    return true
+  } catch (e) {
+    showToast(`复制失败：${libraryErrorMessage(e)}`, 'error', 5000)
+    return false
+  }
+}
+
 /**
  * 登录后的衔接：
  * - silent：页面启动恢复会话，不打扰用户；
  * - loadLatest：当前没有未保存修改时，自动打开最近更新的云端简历。
  */
 async function synchronizeAfterLogin(loadLatest: boolean, silent = false): Promise<void> {
+  dropRecoveryDraft()
   resetLibraryState()
   await refreshLibrary()
   if (libraryError.value) {
@@ -386,7 +453,33 @@ export function replaceResume(next: Resume): void {
   docUpdatedAt.value = null
   savedAt.value = null
   lastScope.value = ''
+  dropRecoveryDraft()
 }
+
+/** 首次进入：本地为空、没有会话、没有恢复草稿时，询问从空白还是示例开始 */
+export async function maybeOfferOnboarding(): Promise<void> {
+  await sessionReady
+  if (onboarding.value || recoveryActive.value) return
+  // 有未处理草稿时先不打扰，也不记为已引导，等草稿处理完再出现
+  if (recoveryDraft.value) return
+  if (loadOnboardedPref() || initial.status !== 'empty' || account.ready) {
+    saveOnboardedPref()
+    return
+  }
+  onboarding.value = true
+}
+
+export function finishOnboarding(startBlank: boolean): void {
+  if (!onboarding.value) return
+  onboarding.value = false
+  saveOnboardedPref()
+  if (!startBlank) return
+  void createNewDocument().then((ok) => {
+    if (ok) showToast('已新建空白简历，填写后记得保存', 'info', 3500)
+  })
+}
+
+let sessionReady: Promise<void> = Promise.resolve()
 
 watch(templateId, saveTemplatePref)
 watch(themeId, saveThemePref)
@@ -395,13 +488,25 @@ if (typeof window !== 'undefined') {
   // 显式保存模式：有未保存修改时离开页面给出浏览器原生确认
   window.addEventListener('beforeunload', (event) => {
     if (!dirty.value) return
+    flushRecoveryDraft()
     event.preventDefault()
     event.returnValue = ''
   })
 
+  // 未登录且有未保存修改时，节流写一份本地恢复草稿
+  watch(
+    [resume, templateId, themeId],
+    () => {
+      if (account.ready || !dirty.value) return
+      window.clearTimeout(recoveryTimer)
+      recoveryTimer = window.setTimeout(flushRecoveryDraft, 800)
+    },
+    { deep: true },
+  )
+
   // 启动时恢复已登录会话；已有云端简历则打开最近更新的一份
   if (account.available) {
-    void (async () => {
+    sessionReady = (async () => {
       const { session, callback } = await initAccount()
       handleAuthCallback(callback, session)
       if (session) await synchronizeAfterLogin(true, true)
@@ -432,6 +537,7 @@ export function useResume() {
     openDocFromLibrary,
     createNewDocument,
     deleteLibraryDoc,
+    duplicateLibraryDoc,
     refreshLibrary,
     login,
     register,
@@ -442,5 +548,11 @@ export function useResume() {
     submitNewPassword,
     finishRecovery,
     replaceResume,
+    recoveryDraft,
+    restoreRecovery,
+    dismissRecovery,
+    onboarding,
+    maybeOfferOnboarding,
+    finishOnboarding,
   }
 }

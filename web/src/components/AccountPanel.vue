@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { ResumeMeta } from '../cloud/library'
 import { useResume } from '../store/useResume'
 import { showToast } from '../ui/toast'
@@ -24,6 +24,7 @@ const {
   openDocFromLibrary,
   createNewDocument,
   deleteLibraryDoc,
+  duplicateLibraryDoc,
   refreshLibrary,
   logout,
 } = useResume()
@@ -64,6 +65,18 @@ async function newDoc(): Promise<void> {
 
 async function removeDoc(meta: ResumeMeta): Promise<void> {
   await deleteLibraryDoc(meta)
+}
+
+const duplicatingId = ref('')
+
+async function duplicateDoc(meta: ResumeMeta): Promise<void> {
+  if (duplicatingId.value) return
+  duplicatingId.value = meta.id
+  try {
+    await duplicateLibraryDoc(meta)
+  } finally {
+    duplicatingId.value = ''
+  }
 }
 
 async function doLogout(): Promise<void> {
@@ -131,6 +144,16 @@ async function doLogout(): Promise<void> {
               <span class="doc-meta">
                 {{ openingId === doc.id ? '正在打开…' : `更新于 ${formatUpdated(doc.updatedAt)}` }}
               </span>
+            </button>
+            <button
+              class="icon-btn"
+              type="button"
+              :aria-label="`复制 ${doc.name}`"
+              :title="`复制 ${doc.name}`"
+              :disabled="duplicatingId === doc.id"
+              @click="duplicateDoc(doc)"
+            >
+              <Icon name="copy" />
             </button>
             <button
               class="icon-btn danger"
@@ -236,6 +259,8 @@ async function doLogout(): Promise<void> {
   transition: background-color 0.2s var(--ease), color 0.2s var(--ease);
 }
 .icon-btn svg { width: 17px; height: 17px; }
+.icon-btn:hover { background: var(--fill-strong); color: var(--ink); }
+.icon-btn:disabled { opacity: 0.4; cursor: default; }
 .icon-btn.danger:hover { background: rgba(255, 59, 48, 0.1); color: var(--danger); }
 
 .empty {

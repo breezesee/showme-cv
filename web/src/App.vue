@@ -5,6 +5,7 @@ import AvatarBadge from './components/AvatarBadge.vue'
 import ConfirmHost from './components/ConfirmHost.vue'
 import ReceivedView from './components/ReceivedView.vue'
 import RecoveryScreen from './components/RecoveryScreen.vue'
+import RecoveryBanner from './components/RecoveryBanner.vue'
 import ResumeEditor from './components/ResumeEditor.vue'
 import SaveResumeForm from './components/SaveResumeForm.vue'
 import SectionManager from './components/SectionManager.vue'
@@ -22,12 +23,15 @@ import { parseRelayHash, type RelayPayload } from './relay/link'
 import { useResume } from './store/useResume'
 import { TEMPLATES } from './templates/catalog'
 import { THEMES } from './templates/themes'
-import { exportPdf } from './ui/actions'
 import { showToast } from './ui/toast'
 import { useMediaQuery } from './ui/useMediaQuery'
 
-const { resume, templateId, themeId, initialStatus, account, dirty, docName, savedAt, createNewDocument } = useResume()
+const {
+  resume, templateId, themeId, initialStatus, account, dirty, docName, savedAt, createNewDocument,
+  recoveryDraft, restoreRecovery, dismissRecovery, onboarding, maybeOfferOnboarding, finishOnboarding,
+} = useResume()
 const isWide = useMediaQuery('(min-width: 1100px)')
+const editorRef = ref<InstanceType<typeof ResumeEditor>>()
 const logo = `${import.meta.env.BASE_URL}icons/icon.svg`
 
 type Tab = 'edit' | 'preview' | 'account'
@@ -43,6 +47,14 @@ const saveOpen = ref(false)
 const accountOpen = ref(false)
 const sectionsOpen = ref(false)
 const appearanceOpen = ref(false)
+
+/** Sheet 关闭（含右上角与遮罩）等同选择「先看示例」，并标记已引导 */
+const onboardingOpen = computed({
+  get: () => onboarding.value,
+  set: (open: boolean) => {
+    if (!open) finishOnboarding(false)
+  },
+})
 
 /** 当前工作副本的名称与保存状态（顶栏胶囊） */
 const docLabel = computed(() => docName.value || '未命名草稿')
@@ -119,6 +131,13 @@ function editFromAccount(): void {
   selectTab('edit')
 }
 
+/** 投递检查「去修改」：关闭分享页，切到编辑并展开、滚动到对应字段 */
+function focusIssue(target: string): void {
+  shareOpen.value = false
+  if (!isWide.value) selectTab('edit')
+  void nextTick(() => editorRef.value?.focusSection(target))
+}
+
 function openSave(): void {
   saveOpen.value = true
 }
@@ -136,26 +155,12 @@ function onRecoveryClose(): void {
   else selectTab('account')
 }
 
-/** 直出 PDF（与预览一致）；打印版入口保留在分享页的导出区 */
-const exportingPdf = ref(false)
-async function runExportPdf(): Promise<void> {
-  if (exportingPdf.value) return
-  exportingPdf.value = true
-  try {
-    await exportPdf(resume.value, templateId.value, themeId.value)
-  } catch (e) {
-    showToast(`导出 PDF 失败：${e instanceof Error ? e.message : '未知错误'}`, 'error', 5000)
-  } finally {
-    exportingPdf.value = false
-  }
-}
-
 onMounted(() => {
   const relayed = consumeRelayHash()
   window.addEventListener('hashchange', onHashChange)
   if (relayed) return
   if (initialStatus === 'corrupt') showToast('本地简历数据无法读取，已另存原文并载入示例简历', 'error', 5000)
-  else if (initialStatus === 'empty') showToast('已载入示例简历，编辑后点击「保存」存到本浏览器', 'info', 4500)
+  void maybeOfferOnboarding()
 })
 onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
 </script>
@@ -186,7 +191,6 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
 
       <div class="tools">
         <button class="btn" type="button" @click="shareOpen = true"><Icon name="share" />分享与导出</button>
-        <button class="btn" type="button" :disabled="exportingPdf" @click="runExportPdf"><Icon name="download" />{{ exportingPdf ? '导出中…' : '导出 PDF' }}</button>
         <button class="btn btn-primary" type="button" @click="openSave"><Icon name="save" />保存</button>
       </div>
 
@@ -209,8 +213,12 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
       </div>
     </header>
 
+    <div v-if="recoveryDraft" class="wide-banner">
+      <RecoveryBanner :at="recoveryDraft.at" @restore="restoreRecovery" @dismiss="dismissRecovery" />
+    </div>
+
     <main class="columns">
-      <div class="col-edit"><ResumeEditor @need-login="accountOpen = true" /></div>
+      <div class="col-edit"><ResumeEditor ref="editorRef" /></div>
       <div class="col-preview">
         <div class="look-bar">
           <div class="look-group">
@@ -233,7 +241,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
     <Sheet v-model:open="saveOpen" title="保存简历">
       <SaveResumeForm v-if="saveOpen" @done="saveOpen = false" @cancel="saveOpen = false" />
     </Sheet>
-    <Sheet v-model:open="shareOpen" title="分享与导出"><SharePanel /></Sheet>
+    <Sheet v-model:open="shareOpen" title="分享与导出"><SharePanel @edit-target="focusIssue" /></Sheet>
     <Sheet v-model:open="sectionsOpen" title="板块与顺序"><SectionManager v-if="sectionsOpen" /></Sheet>
     <Sheet v-model:open="accountOpen" title="个人中心">
       <AccountPanel v-if="accountOpen" @open-editor="editFromAccount" />
@@ -252,8 +260,12 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
       </button>
     </header>
 
+    <div v-if="recoveryDraft" class="narrow-banner">
+      <RecoveryBanner :at="recoveryDraft.at" @restore="restoreRecovery" @dismiss="dismissRecovery" />
+    </div>
+
     <main class="narrow-body">
-      <ResumeEditor v-show="tab === 'edit'" class="pane" @need-login="accountOpen = true" />
+      <ResumeEditor v-show="tab === 'edit'" ref="editorRef" class="pane" />
       <div v-show="tab === 'preview'" class="preview-page">
         <button class="look-btn mobile-look" type="button" @click="appearanceOpen = true">
           <Icon name="layers" />
@@ -289,7 +301,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
     <Sheet v-model:open="saveOpen" title="保存简历">
       <SaveResumeForm v-if="saveOpen" @done="saveOpen = false" @cancel="saveOpen = false" />
     </Sheet>
-    <Sheet v-model:open="shareOpen" title="分享与导出"><SharePanel /></Sheet>
+    <Sheet v-model:open="shareOpen" title="分享与导出"><SharePanel @edit-target="focusIssue" /></Sheet>
     <Sheet v-model:open="sectionsOpen" title="板块与顺序"><SectionManager v-if="sectionsOpen" /></Sheet>
     <Sheet v-model:open="appearanceOpen" title="外观">
       <div class="appearance">
@@ -308,6 +320,22 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
       </div>
     </Sheet>
   </div>
+
+  <Sheet v-model:open="onboardingOpen" title="开始使用 ShowMe">
+    <div class="onboarding">
+      <p class="onboarding-lead">现在展示的是一份示例简历。想从空白开始，还是先看看示例？</p>
+      <div class="onboarding-choices">
+        <button class="onboarding-choice primary" type="button" @click="finishOnboarding(true)">
+          <b>从空白开始</b>
+          <span>清空示例内容，填写自己的简历</span>
+        </button>
+        <button class="onboarding-choice" type="button" @click="finishOnboarding(false)">
+          <b>先看示例</b>
+          <span>保留示例内容，可随意修改</span>
+        </button>
+      </div>
+    </div>
+  </Sheet>
 
   <RecoveryScreen @close="onRecoveryClose" />
   <ConfirmHost />
@@ -511,4 +539,27 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
 }
 .tab svg { width: 24px; height: 24px; }
 .tab.active { color: var(--accent); }
+
+/* 未保存草稿横幅与首次引导 */
+.wide-banner { max-width: 1440px; margin: 16px auto -6px; padding: 0 24px; }
+.narrow-banner { padding: 8px 20px 0; }
+.onboarding { display: flex; flex-direction: column; gap: 14px; }
+.onboarding-lead { margin: 0; font-size: 15px; line-height: 1.6; }
+.onboarding-choices { display: flex; flex-direction: column; gap: 10px; }
+.onboarding-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+.onboarding-choice b { font-size: 15px; font-weight: 600; }
+.onboarding-choice span { color: var(--muted); font-size: 13px; }
+.onboarding-choice.primary { border-color: rgba(0, 113, 227, 0.45); background: rgba(0, 113, 227, 0.05); }
+.onboarding-choice:hover { background: var(--fill); }
 </style>

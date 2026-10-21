@@ -18,4 +18,11 @@ export const storage = {
       return false
     }
   },
+  remove(key: string): void {
+    try {
+      window.localStorage.removeItem(key)
+    } catch {
+      // 存储不可用时无需处理
+    }
+  },
 }

@@ -10,6 +10,7 @@
 export interface RelayKV {
   get(key: string): Promise<string | null>
   put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>
+  delete(key: string): Promise<void>
 }
 
 export interface RelayEnv {
@@ -17,14 +18,20 @@ export interface RelayEnv {
 }
 
 export const RELAY_TTL_SECONDS = 7 * 24 * 60 * 60
-/** 密文上限：示例规模的简历密文约 1–2KB，64KB 足够容纳很长的简历 */
-export const RELAY_MAX_CHARS = 64 * 1024
+export const RELAY_TTL_OPTIONS = [7, 30] as const
+export type RelayTtlDays = (typeof RELAY_TTL_OPTIONS)[number]
+/** 密文上限：含本地照片的简历会明显变大，128KB 仍远低于 KV 限制 */
+export const RELAY_MAX_CHARS = 128 * 1024
 export const RELAY_ID_LENGTH = 10
 
 const ID_PATTERN = /^[0-9A-Za-z]{10}$/
 const BODY_PATTERN = /^[A-Za-z0-9_-]+$/
+const TOKEN_PATTERN = /^[A-Za-z0-9_-]{20,200}$/
 const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
 const KEY_PREFIX = 'r:'
+/** 吊销令牌哈希单独存一条，键与内容同 TTL */
+const META_PREFIX = 'm:'
+const REVOKE_HEADER = 'X-ShowMe-Revoke'
 
 export function isRelayId(id: string): boolean {
   return ID_PATTERN.test(id)
@@ -48,6 +55,36 @@ function json(status: number, body: unknown): Response {
   })
 }
 
+function toBase64Url(bytes: Uint8Array): string {
+  let bin = ''
+  for (const byte of bytes) bin += String.fromCharCode(byte)
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+/** 32 字节随机吊销令牌，只在生成响应中返回一次 */
+export function newRevokeToken(): string {
+  return toBase64Url(crypto.getRandomValues(new Uint8Array(32)))
+}
+
+async function hashToken(token: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))
+  return toBase64Url(new Uint8Array(digest))
+}
+
+/** 长度一致时逐字节异或，避免按字符提前返回 */
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  let diff = 0
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return diff === 0
+}
+
+export function parseRelayTtl(value: string | null): RelayTtlDays | null {
+  if (value === null) return 7
+  const days = Number(value)
+  return (RELAY_TTL_OPTIONS as readonly number[]).includes(days) ? (days as RelayTtlDays) : null
+}
+
 export async function handleRelayPost(request: Request, env: RelayEnv, now = Date.now()): Promise<Response> {
   const declared = Number(request.headers.get('Content-Length') ?? '0')
   if (declared > RELAY_MAX_CHARS) return json(413, { error: 'too-large' })
@@ -55,11 +92,17 @@ export async function handleRelayPost(request: Request, env: RelayEnv, now = Dat
   if (body.length > RELAY_MAX_CHARS) return json(413, { error: 'too-large' })
   if (!body || !BODY_PATTERN.test(body)) return json(400, { error: 'bad-body' })
 
+  const ttlDays = parseRelayTtl(new URL(request.url).searchParams.get('ttl'))
+  if (ttlDays === null) return json(400, { error: 'bad-ttl' })
+  const ttlSeconds = ttlDays * 24 * 60 * 60
+
   // 不做「先查再写」的碰撞检查：KV 会在边缘缓存「不存在」的查询结果，反而可能让刚写入的短码短时间内读不到；
-  // 59 位随机短码在 7 天有效期内的碰撞概率可以忽略
+  // 59 位随机短码在有效期内的碰撞概率可以忽略
   const id = newRelayId()
-  await env.RELAY.put(KEY_PREFIX + id, body, { expirationTtl: RELAY_TTL_SECONDS })
-  return json(201, { id, expiresAt: now + RELAY_TTL_SECONDS * 1000 })
+  const revokeToken = newRevokeToken()
+  await env.RELAY.put(KEY_PREFIX + id, body, { expirationTtl: ttlSeconds })
+  await env.RELAY.put(META_PREFIX + id, await hashToken(revokeToken), { expirationTtl: ttlSeconds })
+  return json(201, { id, expiresAt: now + ttlSeconds * 1000, revokeToken })
 }
 
 export async function handleRelayGet(id: string, env: RelayEnv): Promise<Response> {
@@ -72,14 +115,31 @@ export async function handleRelayGet(id: string, env: RelayEnv): Promise<Respons
   })
 }
 
-/** 按路径分发：POST /api/relay、GET /api/relay/<id>；不匹配返回 null（交给后续处理） */
+/** 提前失效：必须携带生成时返回的吊销令牌 */
+export async function handleRelayDelete(id: string, request: Request, env: RelayEnv): Promise<Response> {
+  if (!isRelayId(id)) return json(404, { error: 'not-found' })
+  const token = (request.headers.get(REVOKE_HEADER) ?? '').trim()
+  if (!TOKEN_PATTERN.test(token)) return json(403, { error: 'forbidden' })
+  const stored = await env.RELAY.get(META_PREFIX + id)
+  if (stored === null) return json(404, { error: 'not-found' })
+  if (!safeEqual(stored, await hashToken(token))) return json(403, { error: 'forbidden' })
+  await env.RELAY.delete(KEY_PREFIX + id)
+  await env.RELAY.delete(META_PREFIX + id)
+  return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } })
+}
+
+/** 按路径分发：POST /api/relay、GET/DELETE /api/relay/<id>；不匹配返回 null（交给后续处理） */
 export async function routeRelay(request: Request, env: RelayEnv): Promise<Response | null> {
   const path = new URL(request.url).pathname
   if (path === '/api/relay') {
     return request.method === 'POST' ? handleRelayPost(request, env) : json(405, { error: 'method' })
   }
   const m = /^\/api\/relay\/([^/]+)$/.exec(path)
-  if (m) return request.method === 'GET' ? handleRelayGet(m[1], env) : json(405, { error: 'method' })
+  if (m) {
+    if (request.method === 'GET') return handleRelayGet(m[1]!, env)
+    if (request.method === 'DELETE') return handleRelayDelete(m[1]!, request, env)
+    return json(405, { error: 'method' })
+  }
   return null
 }
 
@@ -99,6 +159,9 @@ export function memoryKV(clock: () => number = Date.now): RelayKV & { size(): nu
     async put(key, value, options) {
       const ttl = options?.expirationTtl ?? Infinity
       store.set(key, { value, expires: clock() + ttl * 1000 })
+    },
+    async delete(key) {
+      store.delete(key)
     },
     size: () => store.size,
   }

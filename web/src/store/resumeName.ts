@@ -42,3 +42,19 @@ export function suggestResumeName(
   // 理论上不可达：同一天同一份简历不会需要上千个副本
   return base
 }
+
+/** 复制简历时的名称：名称（副本）、名称（副本 2）…；已带副本后缀时递增编号 */
+export function suggestCopyName(base: string, existing: readonly string[]): string {
+  const cleaned = cleanResumeName(base) || '我的简历'
+  const copy = /（副本(?: (\d+))?）$/.exec(cleaned)
+  const stripped = (copy ? cleaned.slice(0, copy.index).trim() : cleaned) || cleaned
+  const taken = new Set(existing.map((n) => cleanResumeName(n).toLocaleLowerCase()))
+  // 源名称本身已是副本时从下一个编号开始，避免「副本（副本）」
+  const start = copy ? (copy[1] ? Number(copy[1]) + 1 : 2) : 1
+  for (let i = start; i < 1000; i++) {
+    const suffix = i === 1 ? '（副本）' : `（副本 ${i}）`
+    const candidate = cleanResumeName(stripped.slice(0, MAX_RESUME_NAME - suffix.length) + suffix)
+    if (!taken.has(candidate.toLocaleLowerCase())) return candidate
+  }
+  return cleaned
+}

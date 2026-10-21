@@ -4,13 +4,12 @@ import { account } from '../cloud/account'
 import { photoPublicUrl } from '../cloud/client'
 import { uploadResumePhoto } from '../cloud/photos'
 import { validatePhotoFile } from '../model/photo'
-import { processPhoto } from '../photo/process'
+import { processPhoto, processPhotoLocal } from '../photo/process'
 import { showToast } from '../ui/toast'
 import Icon from './Icon.vue'
 
-/** 可选照片：仅登录后可上传；未上传时不渲染任何占位 */
+/** 可选照片：登录后上传到云端；未登录时本地处理为 data URL；未上传时不渲染占位 */
 const photo = defineModel<string>({ required: true })
-const emit = defineEmits<{ 'need-login': [] }>()
 
 const input = ref<HTMLInputElement>()
 const busy = ref(false)
@@ -22,21 +21,16 @@ watch(photo, () => {
 })
 
 const note = computed(() => {
-  if (!account.available) return '云服务未配置，照片功能暂不可用'
   if (account.restoring) return '正在恢复登录状态…'
-  if (!account.ready) return '登录后可上传，不随 JSON 备份导出'
   if (busy.value) return '正在处理照片…'
-  return 'JPG / PNG / WebP，不超过 10MB，裁成 5:7'
+  if (account.ready) return 'JPG / PNG / WebP，不超过 10MB，裁成 5:7，随简历保存到云端'
+  return 'JPG / PNG / WebP，不超过 10MB，裁成 5:7；照片保存在本机，会随 JSON 备份与分享导出'
 })
 
-const disabled = computed(() => !account.available || busy.value || account.restoring)
+const disabled = computed(() => busy.value || account.restoring)
 
 function choose(): void {
   if (disabled.value) return
-  if (!account.ready) {
-    emit('need-login')
-    return
-  }
   input.value?.click()
 }
 
@@ -52,9 +46,14 @@ async function onChange(event: Event): Promise<void> {
   }
   busy.value = true
   try {
-    const jpeg = await processPhoto(file)
-    photo.value = await uploadResumePhoto(jpeg)
-    showToast('照片已上传', 'success')
+    if (account.ready) {
+      const jpeg = await processPhoto(file)
+      photo.value = await uploadResumePhoto(jpeg)
+      showToast('照片已上传', 'success')
+    } else {
+      photo.value = await processPhotoLocal(file)
+      showToast('照片已添加，会保存在本机', 'success')
+    }
   } catch (e) {
     showToast(e instanceof Error ? e.message : '照片上传失败，请重试', 'error')
   } finally {

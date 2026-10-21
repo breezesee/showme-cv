@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { emptyResume, sampleResume } from '../model/resume'
-import { cleanResumeName, MAX_RESUME_NAME, suggestResumeName } from './resumeName'
+import { cleanResumeName, MAX_RESUME_NAME, suggestCopyName, suggestResumeName } from './resumeName'
 
 const basics = (name: string, title: string) => {
   const r = emptyResume()
@@ -59,5 +59,28 @@ describe('suggestResumeName', () => {
     const got = suggestResumeName(basics(base, ''), [base], OCT_19)
     expect(got.length).toBeLessThanOrEqual(MAX_RESUME_NAME)
     expect(got.endsWith('（2）')).toBe(true)
+  })
+})
+
+describe('suggestCopyName', () => {
+  it('追加「（副本）」，重名时递增编号', () => {
+    expect(suggestCopyName('李小明-产品经理', [])).toBe('李小明-产品经理（副本）')
+    expect(suggestCopyName('李小明-产品经理', ['李小明-产品经理（副本）'])).toBe('李小明-产品经理（副本 2）')
+    expect(
+      suggestCopyName('李小明-产品经理', ['李小明-产品经理（副本）', '李小明-产品经理（副本 2）']),
+    ).toBe('李小明-产品经理（副本 3）')
+  })
+
+  it('已有副本后缀时继续递增，而不是叠加', () => {
+    expect(suggestCopyName('李小明（副本）', [])).toBe('李小明（副本 2）')
+    expect(suggestCopyName('李小明（副本 2）', ['李小明（副本 2）'])).toBe('李小明（副本 3）')
+  })
+
+  it('空名称回退为「我的简历」，并遵守长度上限', () => {
+    expect(suggestCopyName('  ', [])).toBe('我的简历（副本）')
+    const base = 'a'.repeat(MAX_RESUME_NAME)
+    const got = suggestCopyName(base, [])
+    expect(got.length).toBeLessThanOrEqual(MAX_RESUME_NAME)
+    expect(got.endsWith('（副本）')).toBe(true)
   })
 })

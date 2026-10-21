@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, nextTick, reactive } from 'vue'
+import { normalizeMonth } from '../model/date'
 import { insertCustomSection } from '../model/layout'
 import {
   emptyCustomSection,
@@ -18,8 +19,6 @@ import PhotoField from './PhotoField.vue'
 import SectionCard from './SectionCard.vue'
 import TextField from './TextField.vue'
 
-const emit = defineEmits<{ 'need-login': [] }>()
-
 const { resume, saving, savedAt, dirty } = useResume()
 
 const open = reactive({ basics: true, education: false, work: false, projects: false, skills: false, custom: false, summary: false })
@@ -36,6 +35,44 @@ function createCustomSection(): CustomSection {
 /** 长文本字段的格式说明（与模板运行时 SM.rich 的规则一致） */
 const RICH_HINT = '回车换行，空行分段，以「-」开头的行显示为圆点'
 
+type SectionKey = keyof typeof open
+
+function sectionKeyFor(target: string): SectionKey | null {
+  if (target.startsWith('sec-')) {
+    const id = target.slice(4)
+    if (id === 'basics' || id === 'education' || id === 'work' || id === 'projects'
+      || id === 'skills' || id === 'summary' || id === 'custom') return id
+    return null
+  }
+  if (target.startsWith('education-')) return 'education'
+  if (target.startsWith('work-')) return 'work'
+  if (target.startsWith('project-')) return 'projects'
+  if (target.startsWith('skill-')) return 'skills'
+  return null
+}
+
+/** 投递检查「去修改」：展开对应板块并滚动到条目；收起状态先等展开动画 */
+function focusSection(target: string): void {
+  const key = sectionKeyFor(target)
+  if (key) open[key] = true
+  void nextTick(() => {
+    window.setTimeout(() => {
+      const el = document.getElementById(target)
+      if (!el) return
+      const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+      el.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' })
+      if (!reduced) {
+        el.animate?.(
+          [{ boxShadow: '0 0 0 3px rgba(0, 113, 227, 0.35)' }, { boxShadow: '0 0 0 3px rgba(0, 113, 227, 0)' }],
+          { duration: 1400, easing: 'ease-out' },
+        )
+      }
+    }, 320)
+  })
+}
+
+defineExpose({ focusSection })
+
 const pad = (n: number) => String(n).padStart(2, '0')
 const saveText = computed(() => {
   if (saving.value) return '保存中…'
@@ -47,7 +84,7 @@ const saveText = computed(() => {
 
 <template>
   <div class="editor">
-    <SectionCard v-model:open="open.basics" title="基本信息" :meta="resume.basics.name">
+    <SectionCard id="sec-basics" v-model:open="open.basics" title="基本信息" :meta="resume.basics.name">
       <TextField v-model="resume.basics.name" label="姓名" placeholder="如：李小明" />
       <TextField v-model="resume.basics.title" label="求职意向" placeholder="如：产品经理" />
       <div class="row">
@@ -56,11 +93,11 @@ const saveText = computed(() => {
       </div>
       <TextField v-model="resume.basics.email" label="邮箱" type="email" />
       <ExtrasField v-model="resume.basics.extras" />
-      <PhotoField v-model="resume.basics.photo" @need-login="emit('need-login')" />
+      <PhotoField v-model="resume.basics.photo" />
     </SectionCard>
 
-    <SectionCard v-model:open="open.education" title="教育经历" :meta="count(resume.education.length)" :hidden="hidden('education')">
-      <EntryList :items="resume.education" noun="教育经历" :create="emptyEducation" :summary="(e) => e.school">
+    <SectionCard id="sec-education" v-model:open="open.education" title="教育经历" :meta="count(resume.education.length)" :hidden="hidden('education')">
+      <EntryList :items="resume.education" noun="教育经历" :create="emptyEducation" :summary="(e) => e.school" id-prefix="education">
         <template #default="{ item }">
           <TextField v-model="item.school" label="学校" />
           <div class="row">
@@ -68,24 +105,24 @@ const saveText = computed(() => {
             <TextField v-model="item.degree" label="学历" placeholder="本科 / 硕士" />
           </div>
           <div class="row">
-            <TextField v-model="item.start" label="开始" placeholder="2015.09" />
-            <TextField v-model="item.end" label="结束" placeholder="2019.06" />
+            <TextField v-model="item.start" label="开始" placeholder="2015.09" @blur="item.start = normalizeMonth(item.start)" />
+            <TextField v-model="item.end" label="结束" placeholder="2019.06" @blur="item.end = normalizeMonth(item.end)" />
           </div>
           <TextField v-model="item.notes" label="补充说明" placeholder="GPA、荣誉、主修课程等" multiline :rows="2" :hint="RICH_HINT" />
         </template>
       </EntryList>
     </SectionCard>
 
-    <SectionCard v-model:open="open.work" title="工作经历" :meta="count(resume.work.length)" :hidden="hidden('work')">
-      <EntryList :items="resume.work" noun="工作经历" :create="emptyWork" :summary="(w) => w.company">
+    <SectionCard id="sec-work" v-model:open="open.work" title="工作经历" :meta="count(resume.work.length)" :hidden="hidden('work')">
+      <EntryList :items="resume.work" noun="工作经历" :create="emptyWork" :summary="(w) => w.company" id-prefix="work">
         <template #default="{ item }">
           <div class="row">
             <TextField v-model="item.company" label="公司" />
             <TextField v-model="item.position" label="职位" />
           </div>
           <div class="row">
-            <TextField v-model="item.start" label="开始" placeholder="2022.07" />
-            <TextField v-model="item.end" label="结束" placeholder="至今" />
+            <TextField v-model="item.start" label="开始" placeholder="2022.07" @blur="item.start = normalizeMonth(item.start)" />
+            <TextField v-model="item.end" label="结束" placeholder="至今" @blur="item.end = normalizeMonth(item.end)" />
           </div>
           <TextField
             v-model="item.description"
@@ -100,16 +137,16 @@ const saveText = computed(() => {
       </EntryList>
     </SectionCard>
 
-    <SectionCard v-model:open="open.projects" title="项目经历" :meta="count(resume.projects.length)" :hidden="hidden('projects')">
-      <EntryList :items="resume.projects" noun="项目" :create="emptyProject" :summary="(p) => p.name">
+    <SectionCard id="sec-projects" v-model:open="open.projects" title="项目经历" :meta="count(resume.projects.length)" :hidden="hidden('projects')">
+      <EntryList :items="resume.projects" noun="项目" :create="emptyProject" :summary="(p) => p.name" id-prefix="project">
         <template #default="{ item }">
           <div class="row">
             <TextField v-model="item.name" label="项目名称" />
             <TextField v-model="item.role" label="角色" />
           </div>
           <div class="row">
-            <TextField v-model="item.start" label="开始" />
-            <TextField v-model="item.end" label="结束" />
+            <TextField v-model="item.start" label="开始" @blur="item.start = normalizeMonth(item.start)" />
+            <TextField v-model="item.end" label="结束" @blur="item.end = normalizeMonth(item.end)" />
           </div>
           <TextField
             v-model="item.description"
@@ -124,8 +161,8 @@ const saveText = computed(() => {
       </EntryList>
     </SectionCard>
 
-    <SectionCard v-model:open="open.skills" title="技能" :meta="count(resume.skills.length)" :hidden="hidden('skills')">
-      <EntryList :items="resume.skills" noun="技能分类" :create="emptySkillGroup" :summary="(g) => g.category">
+    <SectionCard id="sec-skills" v-model:open="open.skills" title="技能" :meta="count(resume.skills.length)" :hidden="hidden('skills')">
+      <EntryList :items="resume.skills" noun="技能分类" :create="emptySkillGroup" :summary="(g) => g.category" id-prefix="skill">
         <template #default="{ item }">
           <TextField v-model="item.category" label="分类" placeholder="如：工具、语言" />
           <LinesField v-model="item.items" label="技能（每行一项）" :rows="3" />
@@ -133,8 +170,8 @@ const saveText = computed(() => {
       </EntryList>
     </SectionCard>
 
-    <SectionCard v-model:open="open.custom" title="自定义模块" :meta="count(resume.custom.length)">
-      <EntryList :items="resume.custom" noun="模块" :create="createCustomSection" :summary="(s) => s.title" :max="8">
+    <SectionCard id="sec-custom" v-model:open="open.custom" title="自定义模块" :meta="count(resume.custom.length)">
+      <EntryList :items="resume.custom" noun="模块" :create="createCustomSection" :summary="(s) => s.title" :max="8" id-prefix="custom">
         <template #default="{ item }">
           <TextField v-model="item.title" label="模块标题" placeholder="如：荣誉奖项、证书、社团经历" />
           <TextField v-model="item.body" label="内容" multiline :rows="4" :hint="RICH_HINT" bullets :maxlength="4000" />
@@ -142,7 +179,7 @@ const saveText = computed(() => {
       </EntryList>
     </SectionCard>
 
-    <SectionCard v-model:open="open.summary" title="自我评价" :meta="resume.basics.summary ? '已填写' : ''" :hidden="hidden('summary')">
+    <SectionCard id="sec-summary" v-model:open="open.summary" title="自我评价" :meta="resume.basics.summary ? '已填写' : ''" :hidden="hidden('summary')">
       <TextField v-model="resume.basics.summary" label="介绍自己" multiline :rows="5" :hint="RICH_HINT" />
     </SectionCard>
 

@@ -10,6 +10,8 @@ const props = defineProps<{
   summary: (item: T) => string
   /** 可选上限；达到后禁用添加 */
   max?: number
+  /** 条目 DOM id 前缀：投递检查跳转用，如 work-0 */
+  idPrefix?: string
 }>()
 
 function move(i: number, delta: number) {
@@ -38,7 +40,7 @@ function add() {
 
 <template>
   <div class="entries">
-    <div v-for="(item, i) in items" :key="i" class="entry">
+    <div v-for="(item, i) in items" :id="idPrefix ? `${idPrefix}-${i}` : undefined" :key="i" class="entry">
       <div class="entry-bar">
         <span class="entry-name">{{ summary(item).trim() || `未命名${noun}` }}</span>
         <button class="icon-btn" type="button" :disabled="i === 0" :aria-label="`上移第 ${i + 1} 条`" @click="move(i, -1)">

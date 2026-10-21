@@ -18,6 +18,7 @@ withDefaults(
   }>(),
   { multiline: false, rows: 3, type: 'text', placeholder: '', hint: '', bullets: false },
 )
+const emit = defineEmits<{ blur: [] }>()
 const model = defineModel<string>({ required: true })
 const id = useId()
 const area = ref<HTMLTextAreaElement>()
@@ -38,8 +39,8 @@ function insertBullet(): void {
 <template>
   <div class="field">
     <label class="field-label" :for="id">{{ label }}</label>
-    <textarea v-if="multiline" :id="id" ref="area" v-model="model" class="field-input field-area" :rows="rows" :placeholder="placeholder" :maxlength="maxlength" />
-    <input v-else :id="id" v-model="model" class="field-input" :type="type" :placeholder="placeholder" :maxlength="maxlength" autocomplete="off" />
+    <textarea v-if="multiline" :id="id" ref="area" v-model="model" class="field-input field-area" :rows="rows" :placeholder="placeholder" :maxlength="maxlength" @blur="emit('blur')" />
+    <input v-else :id="id" v-model="model" class="field-input" :type="type" :placeholder="placeholder" :maxlength="maxlength" autocomplete="off" @blur="emit('blur')" />
     <div v-if="hint || (multiline && bullets)" class="field-foot">
       <p v-if="hint" class="field-hint">{{ hint }}</p>
       <button v-if="multiline && bullets" class="field-action" type="button" @click="insertBullet">插入要点</button>

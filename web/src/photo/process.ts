@@ -1,7 +1,9 @@
 import { avatarCropRect, avatarOutputSize } from '../model/avatar'
 import {
   PHOTO_JPEG_QUALITY,
+  PHOTO_LOCAL_JPEG_QUALITY,
   photoCropRect,
+  photoLocalOutputSize,
   photoOutputSize,
   type PhotoCropRect,
 } from '../model/photo'
@@ -15,6 +17,7 @@ async function renderJpeg(
   cropOf: (width: number, height: number) => PhotoCropRect,
   sizeOf: (croppedWidth: number) => { width: number; height: number },
   label: string,
+  quality = PHOTO_JPEG_QUALITY,
 ): Promise<Blob> {
   const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
   try {
@@ -31,7 +34,7 @@ async function renderJpeg(
     ctx.fillRect(0, 0, size.width, size.height)
     ctx.drawImage(bitmap, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, size.width, size.height)
     const jpeg = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, 'image/jpeg', PHOTO_JPEG_QUALITY)
+      canvas.toBlob(resolve, 'image/jpeg', quality)
     })
     if (!jpeg) throw new Error(`${label}处理失败，请换一张图片`)
     return jpeg
@@ -40,9 +43,32 @@ async function renderJpeg(
   }
 }
 
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === 'string') resolve(reader.result)
+      else reject(new Error('照片处理失败，请换一张图片'))
+    }
+    reader.onerror = () => reject(new Error('照片处理失败，请换一张图片'))
+    reader.readAsDataURL(blob)
+  })
+}
+
 /** 简历照片：5:7，最长 700×980 */
 export function processPhoto(file: Blob): Promise<Blob> {
   return renderJpeg(file, photoCropRect, photoOutputSize, '照片')
+}
+
+/** 未登录本地照片：5:7，最长 480×672，直接得到 data URL */
+export function processPhotoLocal(file: Blob): Promise<string> {
+  return renderJpeg(
+    file,
+    photoCropRect,
+    photoLocalOutputSize,
+    '照片',
+    PHOTO_LOCAL_JPEG_QUALITY,
+  ).then(blobToDataUrl)
 }
 
 /** 头像：1:1，最长 320×320 */

@@ -3,7 +3,7 @@
 export type IconName =
   | 'edit' | 'eye' | 'share' | 'print' | 'download' | 'upload' | 'up' | 'down'
   | 'trash' | 'plus' | 'copy' | 'chevron' | 'close' | 'send' | 'check' | 'qr' | 'expand'
-  | 'save' | 'user' | 'layers' | 'mail' | 'star' | 'camera' | 'lock'
+  | 'save' | 'user' | 'layers' | 'mail' | 'star' | 'camera' | 'lock' | 'alert'
 </script>
 
 <script setup lang="ts">
@@ -34,6 +34,7 @@ const paths: Record<IconName, string> = {
   star: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 9.5l6.1-.9L12 3z',
   camera: 'M4 8h3l2-3h6l2 3h3v11H4zM12 16a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z',
   lock: 'M7 10V7a5 5 0 0 1 10 0v3M5 10h14v10H5z',
+  alert: 'M12 3l9 17H3zM12 9v5M12 17h.01',
 }
 </script>
 

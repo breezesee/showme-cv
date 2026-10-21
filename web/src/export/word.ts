@@ -274,7 +274,7 @@ async function loadResumePhoto(resume: Resume): Promise<WordPhoto | undefined> {
     if (!response.ok) return undefined
     return {
       data: new Uint8Array(await response.arrayBuffer()),
-      type: /\.png$/i.test(resume.basics.photo) ? 'png' : 'jpg',
+      type: /^(?:data:image\/png|.*\.png(?:$|\?))/i.test(resume.basics.photo) ? 'png' : 'jpg',
     }
   } catch {
     return undefined

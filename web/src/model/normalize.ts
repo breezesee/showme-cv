@@ -1,5 +1,5 @@
 import { isValidCustomId, reconcileLayout } from './layout'
-import { isPhotoPath } from './photo'
+import { isPhotoValue } from './photo'
 import {
   RESUME_VERSION,
   type BasicExtra,
@@ -64,10 +64,10 @@ function readExtras(o: Obj, p: string): BasicExtra[] {
   return objList(o, 'extras', p, readExtra).filter((e) => e.value.trim() !== '')
 }
 
-/** 照片路径非法时静默置空：完整 URL、路径穿越等不应让整份简历无法导入 */
+/** 照片值非法时静默置空：完整 URL、路径穿越、超长 data URL 不应让整份简历无法导入 */
 function readPhoto(o: Obj, p: string): string {
   const value = str(o, 'photo', p)
-  return isPhotoPath(value) ? value : ''
+  return isPhotoValue(value) ? value : ''
 }
 
 /**

@@ -95,11 +95,14 @@ describe('附加项、自定义模块、布局与照片', () => {
     expect(() => normalizeResume({ basics: { extras: [{ label: 1, value: 'x' }] } })).toThrow(/label/)
   })
 
-  it('照片只接受 Storage 路径，完整 URL 或非法路径置空', () => {
+  it('照片接受 Storage 路径与本地 data URL，完整 URL 或非法路径置空', () => {
     const path = `${UID}/${PHOTO_ID}.jpg`
+    const dataUrl = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ=='
     expect(normalizeResume({ basics: { photo: path } }).basics.photo).toBe(path)
+    expect(normalizeResume({ basics: { photo: dataUrl } }).basics.photo).toBe(dataUrl)
     expect(normalizeResume({ basics: { photo: `https://x/${path}` } }).basics.photo).toBe('')
     expect(normalizeResume({ basics: { photo: '../x.jpg' } }).basics.photo).toBe('')
+    expect(normalizeResume({ basics: { photo: 'data:image/svg+xml;base64,PHN2Zz4=' } }).basics.photo).toBe('')
     expect(() => normalizeResume({ basics: { photo: 1 } })).toThrow(/photo/)
   })
 

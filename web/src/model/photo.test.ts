@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
+  PHOTO_MAX_DATA_CHARS,
   PHOTO_MAX_INPUT_BYTES,
+  isPhotoDataUrl,
   isPhotoPath,
+  isPhotoValue,
   photoCropRect,
+  photoLocalOutputSize,
   photoOutputSize,
   photoUrl,
   validatePhotoFile,
 } from './photo'
+
+const DATA_URL = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ=='
 
 const UID = '3f0e8f7a-1111-4c2b-9d3e-1234567890ab'
 const ID = 'a1b2c3d4-2222-4e5f-8a9b-abcdefabcdef'
@@ -27,6 +33,29 @@ describe('isPhotoPath', () => {
     expect(isPhotoPath(`${UID}/${ID}.gif`)).toBe(false)
     expect(isPhotoPath('')).toBe(false)
     expect(isPhotoPath(null)).toBe(false)
+  })
+})
+
+describe('isPhotoDataUrl', () => {
+  it('接受 JPEG / PNG / WebP data URL', () => {
+    expect(isPhotoDataUrl(DATA_URL)).toBe(true)
+    expect(isPhotoDataUrl('data:image/png;base64,iVBORw0KGgo=')).toBe(true)
+    expect(isPhotoDataUrl('data:image/webp;base64,UklGRg==')).toBe(true)
+  })
+
+  it('拒绝其他类型、非 base64 与超长内容', () => {
+    expect(isPhotoDataUrl('data:image/svg+xml;base64,PHN2Zz4=')).toBe(false)
+    expect(isPhotoDataUrl('data:image/jpeg,abc')).toBe(false)
+    expect(isPhotoDataUrl('data:image/jpeg;base64,')).toBe(false)
+    expect(isPhotoDataUrl(`data:image/jpeg;base64,${'A'.repeat(PHOTO_MAX_DATA_CHARS)}`)).toBe(false)
+    expect(isPhotoDataUrl('https://x/a.jpg')).toBe(false)
+  })
+
+  it('isPhotoValue 同时接受路径与 data URL', () => {
+    expect(isPhotoValue(`${UID}/${ID}.jpg`)).toBe(true)
+    expect(isPhotoValue(DATA_URL)).toBe(true)
+    expect(isPhotoValue('https://x/a.jpg')).toBe(false)
+    expect(isPhotoValue('')).toBe(false)
   })
 })
 
@@ -65,7 +94,19 @@ describe('photoOutputSize', () => {
   })
 })
 
+describe('photoLocalOutputSize', () => {
+  it('本地照片最长 480×672，小图不放大', () => {
+    expect(photoLocalOutputSize(2000)).toEqual({ width: 480, height: 672 })
+    expect(photoLocalOutputSize(320)).toEqual({ width: 320, height: 448 })
+  })
+})
+
 describe('photoUrl', () => {
+  it('data URL 原样返回，不依赖部署地址', () => {
+    expect(photoUrl('', DATA_URL)).toBe(DATA_URL)
+    expect(photoUrl('https://demo.supabase.co', DATA_URL)).toBe(DATA_URL)
+  })
+
   it('拼接公开桶 URL，容忍部署地址末尾斜杠', () => {
     expect(photoUrl('https://demo.supabase.co/', `${UID}/${ID}.jpg`)).toBe(
       `https://demo.supabase.co/storage/v1/object/public/resume-photos/${UID}/${ID}.jpg`,
