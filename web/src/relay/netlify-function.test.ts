@@ -8,10 +8,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /** 内存版 Blobs store：与 getStore('relay') 同名共享 */
 const backing = new Map<string, string>()
+let lastGetOptions: Record<string, unknown> | undefined
 
 vi.mock('@netlify/blobs', () => ({
   getStore: () => ({
     async get(key: string, options?: { type?: string }) {
+      lastGetOptions = options
       const raw = backing.get(key)
       if (raw === undefined) return null
       return options?.type === 'json' ? JSON.parse(raw) : raw
@@ -42,6 +44,7 @@ const del = (id: string, token?: string) =>
 describe('netlify 短码中转函数', () => {
   beforeEach(() => {
     backing.clear()
+    lastGetOptions = undefined
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -67,6 +70,13 @@ describe('netlify 短码中转函数', () => {
 
     vi.setSystemTime(new Date('2026-10-20T10:00:01Z'))
     expect(await (await get(id)).status).toBe(404)
+  })
+
+  it('读取密文使用强一致，吊销后不依赖边缘缓存过期', async () => {
+    await post('strong-consistency')
+    const fetched = await get('a1B2c3D4e5')
+    expect(fetched.status).toBe(404)
+    expect(lastGetOptions).toEqual({ type: 'json', consistency: 'strong' })
   })
 
   it('可选 30 天：29 天仍可读，31 天过期', async () => {

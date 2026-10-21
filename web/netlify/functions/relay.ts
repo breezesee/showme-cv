@@ -18,7 +18,11 @@ interface RelayRecord {
 
 const blobsKV: RelayKV = {
   async get(key) {
-    const record = (await getStore('relay').get(key, { type: 'json' })) as RelayRecord | null
+    // 强一致读取：吊销/写入立即对其它区域生效，避免边缘缓存短暂返回旧密文
+    const record = (await getStore('relay').get(key, {
+      type: 'json',
+      consistency: 'strong',
+    })) as RelayRecord | null
     if (record === null || record.exp <= Date.now()) return null
     return record.v
   },

@@ -25,11 +25,13 @@ import type { TemplateId } from '../templates/catalog'
 import type { ThemeId } from '../templates/themes'
 import { confirmDialog } from '../ui/confirm'
 import { showToast } from '../ui/toast'
+import { BUILD_TIME } from '../version'
 import { loadLocalDocName, saveLocalDocName } from './localDoc'
 import { loadOnboardedPref, loadTemplatePref, loadThemePref, saveOnboardedPref, saveTemplatePref, saveThemePref } from './prefs'
 import { clearRecoveryDraft, readRecoveryDraft, writeRecoveryDraft, type RecoveryDraft } from './recovery'
 import { cleanResumeName, suggestCopyName, suggestResumeName } from './resumeName'
 import { LocalResumeStore, type LoadStatus } from './ResumeStore'
+import { takeUpdateHandoff, writeUpdateHandoff, type UpdateHandoff } from './updateHandoff'
 
 /**
  * 全局文档状态（唯一数据源）。
@@ -40,26 +42,28 @@ import { LocalResumeStore, type LoadStatus } from './ResumeStore'
 
 const localStore = new LocalResumeStore()
 const initial = localStore.load()
+/** 「立即更新」写入的交接快照：启动时消费一次，覆盖本机已保存状态 */
+const updateHandoff = takeUpdateHandoff()
 
 /** 深拷贝一份规范化的基线，用于判断是否有未保存修改（必须与工作副本不共享引用） */
 function snapshot(r: Resume): Resume {
   return normalizeResume(JSON.parse(JSON.stringify(r)))
 }
 
-const resume = ref<Resume>(normalizeResume(initial.resume))
-const templateId = ref<TemplateId>(loadTemplatePref())
-const themeId = ref<ThemeId>(loadThemePref())
+const resume = ref<Resume>(updateHandoff ? updateHandoff.resume : normalizeResume(initial.resume))
+const templateId = ref<TemplateId>(updateHandoff ? updateHandoff.templateId : loadTemplatePref())
+const themeId = ref<ThemeId>(updateHandoff ? updateHandoff.themeId : loadThemePref())
 
 /** 最近一次成功保存/打开时的内容基线 */
-const baseline = ref<Resume>(snapshot(resume.value))
-const docName = ref(loadLocalDocName())
+const baseline = ref<Resume>(updateHandoff ? snapshot(updateHandoff.baseline) : snapshot(resume.value))
+const docName = ref(updateHandoff ? updateHandoff.docName : loadLocalDocName())
 /** 云端文档 id；null 表示尚未入库（本地保存或新建草稿） */
-const docId = ref<string | null>(null)
-const docUpdatedAt = ref<string | null>(null)
+const docId = ref<string | null>(updateHandoff?.docId ?? null)
+const docUpdatedAt = ref<string | null>(updateHandoff?.docUpdatedAt ?? null)
 
 const saving = ref(false)
-const savedAt = ref<number | null>(null)
-const lastScope = ref<'local' | 'cloud' | ''>('')
+const savedAt = ref<number | null>(updateHandoff?.savedAt ?? null)
+const lastScope = ref<'local' | 'cloud' | ''>(updateHandoff?.lastScope ?? '')
 
 const library = ref<ResumeMeta[]>([])
 const libraryLoading = ref(false)
@@ -70,6 +74,8 @@ const openingId = ref('')
 const recoveryDraft = ref<RecoveryDraft | null>(readRecoveryDraft())
 /** 首次进入：空白 / 示例二选一 */
 const onboarding = ref(false)
+/** 本次启动是否由「立即更新」触发的刷新；null 表示普通启动 */
+const restoredFromBuild = ref<number | null>(updateHandoff?.fromBuildTime ?? null)
 
 /** 邮件里的重置密码链接：打开全屏设置新密码；失败时保留错误原因 */
 const recoveryActive = ref(false)
@@ -167,7 +173,7 @@ function dropRecoveryDraft(): void {
 }
 
 function flushRecoveryDraft(): void {
-  if (account.ready || !dirty.value) return
+  if (updateReloading || account.ready || !dirty.value) return
   writeRecoveryDraft({
     resume: resume.value,
     templateId: templateId.value,
@@ -178,6 +184,39 @@ function flushRecoveryDraft(): void {
 }
 
 let recoveryTimer: number | undefined
+/** 「立即更新」触发的刷新进行中：不再写草稿，也不再弹 beforeunload */
+let updateReloading = false
+
+/**
+ * 更新前把完整编辑状态写入 sessionStorage；返回 false 时调用方必须中止刷新。
+ * 有未保存修改时清掉旧草稿（快照已包含最新内容）；只有草稿而当前干净时保留草稿，
+ * 让刷新后仍能看到原来的恢复提示。
+ */
+export function prepareForUpdateReload(): boolean {
+  if (updateReloading) return true
+  try {
+    const handoff: UpdateHandoff = {
+      resume: normalizeResume(resume.value),
+      baseline: snapshot(baseline.value),
+      templateId: templateId.value,
+      themeId: themeId.value,
+      docName: docName.value,
+      docId: docId.value,
+      docUpdatedAt: docUpdatedAt.value,
+      savedAt: savedAt.value,
+      lastScope: lastScope.value,
+      fromBuildTime: BUILD_TIME,
+      at: Date.now(),
+    }
+    if (!writeUpdateHandoff(handoff)) return false
+    if (dirty.value) dropRecoveryDraft()
+    else window.clearTimeout(recoveryTimer)
+    updateReloading = true
+    return true
+  } catch {
+    return false
+  }
+}
 
 /** 恢复上次未保存的草稿：作为未保存内容载入，不覆盖已保存版本 */
 export function restoreRecovery(): void {
@@ -459,6 +498,8 @@ export function replaceResume(next: Resume): void {
 /** 首次进入：本地为空、没有会话、没有恢复草稿时，询问从空白还是示例开始 */
 export async function maybeOfferOnboarding(): Promise<void> {
   await sessionReady
+  // 更新刷新回来的内容一定不是「首次进入」，不再打扰
+  if (restoredFromBuild.value !== null) return
   if (onboarding.value || recoveryActive.value) return
   // 有未处理草稿时先不打扰，也不记为已引导，等草稿处理完再出现
   if (recoveryDraft.value) return
@@ -487,7 +528,7 @@ watch(themeId, saveThemePref)
 if (typeof window !== 'undefined') {
   // 显式保存模式：有未保存修改时离开页面给出浏览器原生确认
   window.addEventListener('beforeunload', (event) => {
-    if (!dirty.value) return
+    if (updateReloading || !dirty.value) return
     flushRecoveryDraft()
     event.preventDefault()
     event.returnValue = ''
@@ -497,7 +538,7 @@ if (typeof window !== 'undefined') {
   watch(
     [resume, templateId, themeId],
     () => {
-      if (account.ready || !dirty.value) return
+      if (updateReloading || account.ready || !dirty.value) return
       window.clearTimeout(recoveryTimer)
       recoveryTimer = window.setTimeout(flushRecoveryDraft, 800)
     },
@@ -509,7 +550,8 @@ if (typeof window !== 'undefined') {
     sessionReady = (async () => {
       const { session, callback } = await initAccount()
       handleAuthCallback(callback, session)
-      if (session) await synchronizeAfterLogin(true, true)
+      // 更新刷新回来的工作副本优先，不能再用云端最近一份覆盖
+      if (session) await synchronizeAfterLogin(restoredFromBuild.value === null, true)
     })()
   }
 }
@@ -551,6 +593,8 @@ export function useResume() {
     recoveryDraft,
     restoreRecovery,
     dismissRecovery,
+    prepareForUpdateReload,
+    restoredFromBuild,
     onboarding,
     maybeOfferOnboarding,
     finishOnboarding,

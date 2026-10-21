@@ -95,11 +95,11 @@ describe('checkUpdate', () => {
 describe('assertUpToDate', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it('本地落后（outdated）→ 抛错并引导清除缓存刷新', async () => {
+  it('本地落后（outdated）→ 抛错并引导更新页面', async () => {
     vi.stubGlobal('fetch', vi.fn(async () =>
       new Response(JSON.stringify({ version: '9.9.9', buildTime: Date.now() + 3_600_000 }), { status: 200 }),
     ))
-    await expect(assertUpToDate()).rejects.toThrow('清除缓存并刷新')
+    await expect(assertUpToDate()).rejects.toThrow('请先更新页面')
   })
 
   it('latest 与 unknown（远端不可用）→ 放行', async () => {

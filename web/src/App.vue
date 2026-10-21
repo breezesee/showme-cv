@@ -16,19 +16,23 @@ import TemplatePicker from './components/TemplatePicker.vue'
 import TemplatePreview from './components/TemplatePreview.vue'
 import ThemePicker from './components/ThemePicker.vue'
 import ToastHost from './components/ToastHost.vue'
+import UpdateBanner from './components/UpdateBanner.vue'
 import VersionFooter from './components/VersionFooter.vue'
 import Icon, { type IconName } from './components/Icon.vue'
 import { CloudRelayError, fetchShortLink } from './relay/cloud'
 import { parseRelayHash, type RelayPayload } from './relay/link'
+import { clearShareView, consumeShareViewExit, markShareView } from './relay/shareSession'
 import { useResume } from './store/useResume'
 import { TEMPLATES } from './templates/catalog'
 import { THEMES } from './templates/themes'
 import { showToast } from './ui/toast'
 import { useMediaQuery } from './ui/useMediaQuery'
+import { BUILD_TIME } from './version'
 
 const {
   resume, templateId, themeId, initialStatus, account, dirty, docName, savedAt, createNewDocument,
   recoveryDraft, restoreRecovery, dismissRecovery, onboarding, maybeOfferOnboarding, finishOnboarding,
+  restoredFromBuild,
 } = useResume()
 const isWide = useMediaQuery('(min-width: 1100px)')
 const editorRef = ref<InstanceType<typeof ResumeEditor>>()
@@ -80,9 +84,11 @@ function consumeRelayHash(): boolean {
   if (result.kind === 'none') return false
   // 先清掉地址中的数据：刷新不会重复弹出，数据和密钥也不会留在浏览历史里
   history.replaceState(history.state, '', location.pathname + location.search)
+  clearShareView()
   if (result.kind === 'broken') showToast('链接已损坏，未导入任何内容', 'error', 4000)
   else if (result.kind === 'ok') {
     incoming.value = { resume: result.resume, look: result.look, permission: result.permission }
+    markShareView()
   } else void receiveShortLink(result.id, result.key)
   return true
 }
@@ -91,6 +97,7 @@ async function receiveShortLink(id: string, key: string): Promise<void> {
   const dismiss = showToast('正在取回分享的简历…', 'info', 15000)
   try {
     incoming.value = await fetchShortLink(id, key, location.href)
+    markShareView()
     dismiss()
   } catch (e) {
     dismiss()
@@ -105,6 +112,7 @@ function onHashChange(): void {
 
 function closeIncoming(): void {
   incoming.value = null
+  clearShareView()
   // 接收页会盖住主界面：关掉此前打开的弹层，避免关闭分享后旧表单重新弹出
   shareOpen.value = false
   saveOpen.value = false
@@ -160,6 +168,14 @@ onMounted(() => {
   window.addEventListener('hashchange', onHashChange)
   if (relayed) return
   if (initialStatus === 'corrupt') showToast('本地简历数据无法读取，已另存原文并载入示例简历', 'error', 5000)
+  if (restoredFromBuild.value !== null) {
+    const updated = BUILD_TIME > restoredFromBuild.value
+    showToast(updated ? '已更新到新版本，编辑内容已恢复' : '编辑内容已恢复', 'success', 4500)
+  }
+  // 分享页刷新后地址里已没有分享数据：明确告知当前看到的是自己的简历
+  if (consumeShareViewExit()) {
+    showToast('刷新后已退出分享查看；当前显示的是你自己的简历', 'info', 6500)
+  }
   void maybeOfferOnboarding()
 })
 onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
@@ -213,6 +229,8 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
       </div>
     </header>
 
+    <UpdateBanner />
+
     <div v-if="recoveryDraft" class="wide-banner">
       <RecoveryBanner :at="recoveryDraft.at" @restore="restoreRecovery" @dismiss="dismissRecovery" />
     </div>
@@ -259,6 +277,8 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
         <Icon name="save" />保存
       </button>
     </header>
+
+    <UpdateBanner />
 
     <div v-if="recoveryDraft" class="narrow-banner">
       <RecoveryBanner :at="recoveryDraft.at" @restore="restoreRecovery" @dismiss="dismissRecovery" />
