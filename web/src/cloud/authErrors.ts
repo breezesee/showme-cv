@@ -9,6 +9,7 @@ const BY_CODE: Record<string, string> = {
   over_request_rate_limit: '操作太频繁，请稍后再试',
   over_email_send_rate_limit: '操作太频繁，请稍后再试',
   email_not_confirmed: '该邮箱尚未验证',
+  same_password: '新密码不能与旧密码相同',
 }
 
 export function authErrorMessage(e: unknown): string {
