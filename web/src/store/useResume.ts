@@ -358,6 +358,9 @@ function handleAuthCallback(callback: AuthCallback, session: SessionInfo | null)
     showToast(session ? '邮箱已更新' : '邮箱变更已确认，请重新登录', 'success', 4500)
   } else if (callback.kind === 'error' && callback.flow === 'email-change') {
     showToast(`邮箱更换失败：${callback.description}`, 'error', 6000)
+  } else if (callback.kind === 'error') {
+    // 流程标记也丢了（旧版回调地址会这样）：至少明确告知，不静默落进编辑页
+    showToast('邮件链接已失效，请回到账号页重新发起', 'error', 6000)
   }
 }
 

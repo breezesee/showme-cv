@@ -36,8 +36,24 @@ export function parseAuthCallback(search: string, hash: string): AuthCallback {
     }
   }
 
-  if (!h.get('access_token')) return { kind: 'none' }
+  if (!h.get('access_token')) {
+    // 带流程标记却没有令牌：令牌已被邮件客户端预取或 hash 被丢弃，
+    // 仍按该流程的失效态处理，避免无声落回编辑页
+    if (flow) return { kind: 'error', flow, description: '链接已失效' }
+    return { kind: 'none' }
+  }
   if (flow === 'recovery') return { kind: 'recovery' }
   if (flow === 'email-change') return { kind: 'email_change' }
   return { kind: 'none' }
+}
+
+/**
+ * 邮件链接的落地地址。base 可能是相对的 './'（产物可部署在子路径），
+ * 必须基于当前地址解析成绝对 URL，否则会拼出带尾点的错误主机名，
+ * 被 Supabase 判定为未授权后回退到不带 ?auth= 的 Site URL。
+ */
+export function buildAuthRedirect(flow: AuthFlow, base: string, href: string): string {
+  const url = new URL(base || '/', href)
+  url.searchParams.set('auth', flow)
+  return url.href
 }

@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { parseAuthCallback, type AuthCallback } from './authCallback'
+import { buildAuthRedirect, parseAuthCallback, type AuthCallback, type AuthFlow } from './authCallback'
 import { cloudConfigured, getClient, hasStoredSession } from './client'
 import { defaultDisplayName, fetchProfile, saveAvatarPath, saveProfile } from './profile'
 
@@ -139,10 +139,8 @@ export function initAccount(): Promise<BootstrapResult> {
   return bootstrap
 }
 
-function authRedirect(flow: 'recovery' | 'email-change'): string {
-  const base = import.meta.env.BASE_URL || '/'
-  const path = base.endsWith('/') ? base : `${base}/`
-  return `${location.origin}${path}?auth=${flow}`
+function authRedirect(flow: AuthFlow): string {
+  return buildAuthRedirect(flow, import.meta.env.BASE_URL, location.href)
 }
 
 /** 发送密码重置邮件；无论邮箱是否存在都返回成功，避免泄露账号是否注册 */

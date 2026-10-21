@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseAuthCallback } from './authCallback'
+import { buildAuthRedirect, parseAuthCallback } from './authCallback'
 
 describe('parseAuthCallback', () => {
   it('识别密码找回链接', () => {
@@ -30,9 +30,33 @@ describe('parseAuthCallback', () => {
     ).toEqual({ kind: 'error', flow: 'email-change', description: '链接已失效' })
   })
 
+  it('只有流程标记没有令牌时按失效链接处理，不落回编辑页', () => {
+    expect(parseAuthCallback('?auth=recovery', '')).toEqual({
+      kind: 'error',
+      flow: 'recovery',
+      description: '链接已失效',
+    })
+    expect(parseAuthCallback('?auth=email-change', '')).toEqual({
+      kind: 'error',
+      flow: 'email-change',
+      description: '链接已失效',
+    })
+  })
+
   it('不把分享链接或普通地址误判为认证回调', () => {
     expect(parseAuthCallback('', '#r=abc&k=def')).toEqual({ kind: 'none' })
     expect(parseAuthCallback('', '')).toEqual({ kind: 'none' })
-    expect(parseAuthCallback('?auth=recovery', '')).toEqual({ kind: 'none' })
+  })
+
+  it('相对 base 按当前地址解析，回调地址不带尾点', () => {
+    expect(buildAuthRedirect('recovery', './', 'https://showme-cv.netlify.app/')).toBe(
+      'https://showme-cv.netlify.app/?auth=recovery',
+    )
+    expect(buildAuthRedirect('email-change', './', 'https://showme-cv.netlify.app/index.html')).toBe(
+      'https://showme-cv.netlify.app/?auth=email-change',
+    )
+    expect(buildAuthRedirect('recovery', '/app/', 'https://example.com/app/')).toBe(
+      'https://example.com/app/?auth=recovery',
+    )
   })
 })
