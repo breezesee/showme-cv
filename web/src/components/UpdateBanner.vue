@@ -7,7 +7,6 @@ import {
   clearCachesAndReload,
   currentBuild,
   fetchRemoteBuildInfo,
-  formatBuildTime,
   judgeUpdate,
   type BuildInfo,
 } from '../version'
@@ -89,7 +88,7 @@ onBeforeUnmount(() => document.removeEventListener('visibilitychange', onVisibil
     <Icon name="download" class="update-icon" />
     <div class="update-text">
       <b>发现新版本</b>
-      <span>新版本构建于 {{ formatBuildTime(remote.buildTime) }}，更新后当前编辑内容会自动保留。</span>
+      <span>有新版本可用，更新后当前编辑内容会自动保留。</span>
     </div>
     <div class="update-actions">
       <button class="btn btn-plain update-later" type="button" @click="dismiss">稍后</button>

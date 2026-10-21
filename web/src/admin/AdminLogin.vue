@@ -36,7 +36,7 @@ function submit(): void {
       <section class="adm-login-form">
         <p class="adm-eyebrow">管理员登录</p>
         <h2>进入管理台</h2>
-        <p class="adm-login-hint">使用你的 ShowMe 账号登录。只有 app_metadata.role = admin 的账号可以进入。</p>
+        <p class="adm-login-hint">使用你的 ShowMe 账号登录。仅限已获授权的管理员账号进入；如果无法登录，请联系系统负责人开通权限。</p>
 
         <form @submit.prevent="submit">
           <div class="adm-field">

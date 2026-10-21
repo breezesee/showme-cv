@@ -60,7 +60,7 @@ function stopTimer(): void {
 onBeforeUnmount(stopTimer)
 
 function validate(): string | null {
-  if (!account.available) return '云端服务未配置，暂时无法登录'
+  if (!account.available) return '登录暂时不可用，请稍后再试'
   const mailProblem = emailError(email.value)
   if (mailProblem) {
     emailTouched.value = true
@@ -214,7 +214,7 @@ async function switchMode(next: Mode): Promise<void> {
     </p>
 
     <p v-if="!account.available" class="notice">
-      当前环境未配置云端服务，登录不可用；你仍可以将简历保存在本浏览器并导出备份。
+      登录暂时不可用；你仍可以编辑、保存到本机并导出备份。
     </p>
   </div>
 </template>

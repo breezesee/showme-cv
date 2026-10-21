@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   actionLabel,
+  auditTargetLabel,
   banState,
   formatBytes,
   formatDate,
@@ -99,5 +100,24 @@ describe('审计动作与 ID', () => {
     expect(shortId('0faaf427-7e8b-4c13-805a-86bde04c71b0')).toBe('0faaf427')
     expect(shortId('abc')).toBe('abc')
     expect(shortId('')).toBe('—')
+  })
+})
+
+describe('审计对象展示', () => {
+  const base = { targetType: 'user', targetId: '0faaf427-7e8b-4c13-805a-86bde04c71b0' }
+
+  it('用户操作优先显示邮箱', () => {
+    expect(auditTargetLabel({ ...base, detail: { email: 'owner@example.com' } })).toBe('owner@example.com')
+  })
+
+  it('邮箱为空时退回短 ID', () => {
+    expect(auditTargetLabel({ ...base, detail: { email: '  ' } })).toBe('0faaf427')
+    expect(auditTargetLabel({ ...base, detail: {} })).toBe('0faaf427')
+  })
+
+  it('非用户对象即使带邮箱也只显示短 ID', () => {
+    expect(
+      auditTargetLabel({ targetType: 'resume', targetId: 'abc12345', detail: { email: 'owner@example.com' } }),
+    ).toBe('abc12345')
   })
 })

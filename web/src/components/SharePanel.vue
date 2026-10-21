@@ -232,13 +232,13 @@ async function runExport(kind: Exclude<ExportKind, 'print'>): Promise<void> {
       当前为本机地址，其他设备无法打开此链接。请用电脑的局域网 IP 或正式网址访问 ShowMe 后再分享。
     </p>
 
-    <p class="hint share-note">分享与导出的都是当前编辑中的内容，包含尚未保存的修改。</p>
+    <p class="hint share-note">分享和导出的都是你现在看到的内容，包括还没保存的修改。</p>
 
     <!-- 分享：先选用途，再生成链接 -->
     <section class="card block">
       <header class="zone-head">
         <h3>分享</h3>
-        <p class="hint">简历在本机加密后换成短链接和二维码，服务器只保存密文，解密钥匙只在链接里。</p>
+        <p class="hint">链接经过加密，只有拿到链接的人能打开；ShowMe 看不到你的简历内容。</p>
       </header>
 
       <div ref="intentGroup" class="intents" role="radiogroup" aria-label="分享用途" @keydown="onIntentKeydown">
@@ -386,11 +386,11 @@ async function runExport(kind: Exclude<ExportKind, 'print'>): Promise<void> {
       </div>
 
       <details v-if="!hasLocalPhoto" class="more">
-        <summary>更多方式：离线长链接</summary>
-        <p class="hint">整份简历直接编码在链接里，不经过服务器、永不过期；生成后无法撤回。链接很长，适合复制或发送，做不了二维码。</p>
+        <summary>更多方式：备用长链接</summary>
+        <p class="hint">整份简历放在链接里，不经过 ShowMe 服务器，也不会过期；但生成后无法撤回。链接会很长，适合复制或发送，做不了二维码。</p>
         <div class="capsule">
-          <span class="link" aria-label="离线长链接" :title="longUrl">{{ longUrl }}</span>
-          <button class="icon-btn" type="button" aria-label="复制离线长链接" @click="copyLink(longUrl)">
+          <span class="link" aria-label="备用长链接" :title="longUrl">{{ longUrl }}</span>
+          <button class="icon-btn" type="button" aria-label="复制备用长链接" @click="copyLink(longUrl)">
             <Icon name="copy" />
           </button>
         </div>
@@ -399,7 +399,7 @@ async function runExport(kind: Exclude<ExportKind, 'print'>): Promise<void> {
         </div>
       </details>
       <p v-else class="hint">
-        简历含本地照片，离线长链接会过长而无法发送或扫码，请使用上方的短链接。
+        简历含本地照片，备用长链接会过长而无法发送或扫码，请使用上方的短链接。
       </p>
     </section>
 
@@ -437,8 +437,8 @@ async function runExport(kind: Exclude<ExportKind, 'print'>): Promise<void> {
         </button>
         <button class="export-row" type="button" @click="exportCurrent">
           <span class="export-text">
-            <b>JSON 备份</b>
-            <small>数据文件，可在其他设备导入</small>
+            <b>备份文件</b>
+            <small>换设备或重装时可导入恢复</small>
           </span>
           <span class="ext">.json</span>
         </button>
@@ -449,7 +449,7 @@ async function runExport(kind: Exclude<ExportKind, 'print'>): Promise<void> {
     <section class="card block">
       <header class="zone-head">
         <h3>导入</h3>
-        <p class="hint">从 JSON 备份或已有的简历文字创建一份未保存草稿，确认内容后点击「保存」。</p>
+        <p class="hint">从备份文件或已有的简历文字导入；确认内容后再保存。</p>
       </header>
       <div class="actions">
         <button class="btn" type="button" @click="importFromFile"><Icon name="upload" />导入备份</button>

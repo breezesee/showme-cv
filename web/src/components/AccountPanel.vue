@@ -89,7 +89,7 @@ async function doLogout(): Promise<void> {
     <!-- 云服务未配置：说明情况，本地能力不受影响 -->
     <section v-if="!account.available" class="card panel state">
       <h2>云端功能暂未启用</h2>
-      <p class="hint">当前站点没有配置云服务，登录与简历库不可用。编辑、保存到本机、导出与分享都不受影响。</p>
+      <p class="hint">云端功能暂时不可用。编辑、保存到本机、导出和分享都不受影响。</p>
     </section>
 
     <!-- 启动时正在恢复上次的登录会话 -->
@@ -101,7 +101,7 @@ async function doLogout(): Promise<void> {
     <template v-else-if="!account.ready">
       <section class="card panel intro">
         <h2>登录后，简历跟着你走</h2>
-        <p class="hint">云端保存多份简历，换设备接着改；不登录也能保存在当前浏览器。</p>
+        <p class="hint">云端保存多份简历，换设备接着改；不登录也能保存在这台设备。</p>
       </section>
 
       <section class="card panel">
@@ -183,7 +183,7 @@ async function doLogout(): Promise<void> {
     <section v-if="account.ready" class="card panel session">
       <div>
         <p class="session-title">账号</p>
-        <p class="hint">退出后本机缓存仍保留，云端简历库不会被删除。</p>
+        <p class="hint">退出后，本机保存的简历和云端简历库都不会被删除。</p>
       </div>
       <button class="btn btn-danger" type="button" @click="doLogout">退出登录</button>
     </section>

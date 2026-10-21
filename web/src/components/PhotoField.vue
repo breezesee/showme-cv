@@ -23,8 +23,8 @@ watch(photo, () => {
 const note = computed(() => {
   if (account.restoring) return '正在恢复登录状态…'
   if (busy.value) return '正在处理照片…'
-  if (account.ready) return 'JPG / PNG / WebP，不超过 10MB，裁成 5:7，随简历保存到云端'
-  return 'JPG / PNG / WebP，不超过 10MB，裁成 5:7；照片保存在本机，会随 JSON 备份与分享导出'
+  if (account.ready) return '支持 JPG、PNG、WebP，10MB 以内；会自动裁成证件照比例，随简历保存到云端'
+  return '支持 JPG、PNG、WebP，10MB 以内；会自动裁成证件照比例。照片只保存在本机，备份或分享时会一起带走'
 })
 
 const disabled = computed(() => busy.value || account.restoring)

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import Icon from '../components/Icon.vue'
+import { showToast } from '../ui/toast'
 import { banState, formatBytes, formatDateTime, formatRelative } from './adminFormat'
 import type { AdminUserDetailData } from './adminTypes'
 
@@ -30,6 +31,15 @@ const BUCKET_LABELS: Record<string, string> = { 'resume-photos': '简历照片',
 function bucketLabel(bucket: string): string {
   return BUCKET_LABELS[bucket] ?? bucket
 }
+
+async function copyUserId(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(user.value.id)
+    showToast('用户 ID 已复制', 'success')
+  } catch {
+    showToast(`复制失败，请手动复制：${user.value.id}`, 'error', 8000)
+  }
+}
 </script>
 
 <template>
@@ -38,9 +48,11 @@ function bucketLabel(bucket: string): string {
       <span class="adm-avatar" aria-hidden="true">{{ initial }}</span>
       <div class="adm-detail-identity">
         <p class="adm-detail-email">{{ user.email || '无邮箱' }}</p>
-        <p class="adm-detail-id">{{ user.id }}</p>
       </div>
-      <button class="adm-link" type="button" :disabled="busy" @click="emit('refresh')">刷新</button>
+      <div class="adm-detail-head-actions">
+        <button class="adm-link" type="button" :title="user.id" @click="copyUserId">复制用户 ID</button>
+        <button class="adm-link" type="button" :disabled="busy" @click="emit('refresh')">刷新</button>
+      </div>
     </header>
 
     <div class="adm-detail-badges">
@@ -53,7 +65,7 @@ function bucketLabel(bucket: string): string {
     </div>
 
     <section class="adm-detail-section first">
-      <h3>账号信息 <span>仅元信息</span></h3>
+      <h3>账号信息</h3>
       <dl class="adm-facts">
         <div>
           <dt>昵称</dt>
@@ -86,17 +98,21 @@ function bucketLabel(bucket: string): string {
     </section>
 
     <section class="adm-detail-section">
-      <h3>存储占用 <span>{{ formatBytes(storageBytes) }}</span></h3>
+      <h3>照片与头像</h3>
       <ul v-if="data.storage.length" class="adm-meta-list">
         <li v-for="s in data.storage" :key="s.bucket" class="adm-meta-row">
           <span class="adm-meta-name">{{ bucketLabel(s.bucket) }}</span>
-          <span class="adm-meta-sub">{{ s.objects }} 个文件 · {{ formatBytes(s.bytes) }}</span>
+          <span class="adm-meta-sub">{{ s.objects }} 个</span>
         </li>
       </ul>
-      <p v-else class="adm-note">没有上传过头像或照片。</p>
+      <p v-else class="adm-note">没有上传过照片或头像。</p>
+      <details v-if="data.storage.length" class="adm-sys">
+        <summary>查看存储明细</summary>
+        <p class="adm-note">共占用 {{ formatBytes(storageBytes) }}。</p>
+      </details>
     </section>
 
-    <p class="adm-note">管理台只读取账号、简历与存储的元信息，不展示简历正文或文件内容。</p>
+    <p class="adm-note">这里只显示账号和文件的基本信息，看不到简历内容。</p>
 
     <div class="adm-detail-actions">
       <button class="btn" type="button" :disabled="busy || !canReset" @click="emit('reset')">

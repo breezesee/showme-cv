@@ -23,7 +23,7 @@ const scopeText = computed(() =>
     ? docId.value
       ? '保存会更新简历库中的这一份；修改名称不会新建副本。'
       : '保存后会加入你的云端简历库，可在「我的」中打开、切换或删除。'
-    : '未登录：只保存在当前浏览器。登录后可保存多份到云端简历库。',
+    : '未登录：只保存在这台设备。登录后可保存多份到云端简历库。',
 )
 
 onMounted(async () => {
@@ -37,7 +37,7 @@ async function submit(): Promise<void> {
   error.value = ''
   try {
     const result = await saveCurrent(name.value)
-    showToast(result.scope === 'cloud' ? '已保存到简历库' : '已保存到当前浏览器', 'success')
+    showToast(result.scope === 'cloud' ? '已保存到简历库' : '已保存到本机', 'success')
     emit('done')
   } catch (e) {
     error.value = e instanceof Error ? e.message : '保存失败，请稍后重试'

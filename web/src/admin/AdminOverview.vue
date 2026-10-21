@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onActivated, ref } from 'vue'
 import Icon from '../components/Icon.vue'
 import { getClient } from '../cloud/client'
 import { formatBuildTime, currentBuild } from '../version'
 import { adminOverview, adminRecentAudit, fetchRelayStats, mapAdminError } from './adminApi'
-import { actionLabel, formatDateTime, formatNumber, formatRelative, shortId } from './adminFormat'
+import { actionLabel, auditTargetLabel, formatDateTime, formatNumber, formatRelative } from './adminFormat'
 import type { AdminAuditEntry, AdminOverviewData, RelayStats } from './adminTypes'
 import DailyBars from './DailyBars.vue'
 
@@ -61,7 +61,7 @@ async function load(): Promise<void> {
   loading.value = false
 }
 
-onMounted(load)
+onActivated(load)
 </script>
 
 <template>
@@ -107,14 +107,14 @@ onMounted(load)
         </article>
 
         <article class="adm-kpi" data-testid="admin-kpi-relay">
-          <p class="adm-kpi-label">有效分享短链 <span class="adm-kpi-hint">短链</span></p>
+          <p class="adm-kpi-label">有效分享链接</p>
           <p class="adm-kpi-value" :class="{ muted: !relay }">{{ relayCount }}</p>
           <p class="adm-kpi-sub">
             <template v-if="relay">
               <span>7 天内到期 <b>{{ formatNumber(relay.expiring7d) }}</b></span>
               <span>更新于 {{ formatRelative(relay.checkedAt) }}</span>
             </template>
-            <template v-else>{{ relayChecked ? '统计接口暂不可用' : '统计中…' }}</template>
+            <template v-else>{{ relayChecked ? '暂时无法获取分享链接统计，稍后刷新' : '统计中…' }}</template>
           </p>
         </article>
       </div>
@@ -150,28 +150,33 @@ onMounted(load)
         <div class="adm-stack">
           <section class="adm-card">
             <header class="adm-card-head">
-              <h3>分享与系统</h3>
+              <h3>分享链接</h3>
               <span class="adm-card-note">只读</span>
             </header>
             <dl class="adm-facts">
               <div>
-                <dt>短链服务</dt>
+                <dt>分享服务</dt>
                 <dd :class="relay ? 'ok' : 'warn'">{{ relay ? '正常' : '未知' }}</dd>
               </div>
               <div>
-                <dt>有效短链</dt>
+                <dt>有效链接</dt>
                 <dd>{{ relay ? formatNumber(relay.active) : '—' }}</dd>
               </div>
-              <div>
-                <dt>版本</dt>
-                <dd>v{{ build.version }}</dd>
-              </div>
-              <div>
-                <dt>构建时间</dt>
-                <dd>{{ formatBuildTime(build.buildTime) }}</dd>
-              </div>
             </dl>
-            <p class="adm-card-foot">仅统计可管理的短链；离线长链（#r=）不经过服务器，无法在这里查看或撤回。</p>
+            <p class="adm-card-foot">这里只显示通过 ShowMe 生成的分享链接；直接复制的长链接无法在这里管理。</p>
+            <details class="adm-sys">
+              <summary>系统信息</summary>
+              <dl class="adm-facts">
+                <div>
+                  <dt>版本</dt>
+                  <dd>v{{ build.version }}</dd>
+                </div>
+                <div>
+                  <dt>构建时间</dt>
+                  <dd>{{ formatBuildTime(build.buildTime) }}</dd>
+                </div>
+              </dl>
+            </details>
           </section>
 
           <section class="adm-card">
@@ -183,8 +188,8 @@ onMounted(load)
               <li v-for="a in audit" :key="a.id" data-testid="admin-audit-row">
                 <span class="adm-audit-action">{{ actionLabel(a.action) }}</span>
                 <span class="adm-audit-who">{{ a.actorEmail || '系统' }}</span>
-                <time>{{ formatRelative(a.createdAt) }}</time>
-                <span class="adm-audit-target">{{ a.targetType }} · {{ shortId(a.targetId) }}</span>
+                <time :title="formatDateTime(a.createdAt)">{{ formatRelative(a.createdAt) }}</time>
+                <span class="adm-audit-target">→ {{ auditTargetLabel(a) }}</span>
               </li>
             </ul>
             <p v-else class="adm-empty">{{ auditFailed ? '审计记录暂时无法读取' : '还没有管理操作' }}</p>

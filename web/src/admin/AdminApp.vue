@@ -38,7 +38,7 @@ async function boot(): Promise<void> {
   bootError.value = ''
   identity.value = null
   if (!cloudConfigured()) {
-    bootError.value = '云服务未配置，管理台无法使用。'
+    bootError.value = '管理台暂时不可用，请稍后再试或联系技术同事。'
     phase.value = 'error'
     return
   }

@@ -14,7 +14,7 @@ import {
   mapAdminError,
   pageCount,
 } from './adminApi'
-import { banState, formatDateTime, formatNumber, formatRelative, shortId } from './adminFormat'
+import { banState, formatDateTime, formatNumber, formatRelative } from './adminFormat'
 import type { AdminSearchResult, AdminUserDetailData } from './adminTypes'
 import AdminUserDetail from './AdminUserDetail.vue'
 
@@ -162,7 +162,7 @@ async function onSetBan(banned: boolean): Promise<void> {
     banned
       ? {
           title: '禁用该账号登录',
-          message: `禁用后 ${email} 将无法登录，已登录的会话会在短时间内失效。账号与简历数据不会被删除。`,
+          message: `禁用后 ${email} 将无法登录。已登录的设备可能需要重新登录，最长约 1 小时。账号与简历数据不会被删除。`,
           confirmText: '禁用登录',
           danger: true,
         }
@@ -262,7 +262,6 @@ onMounted(load)
           <tr v-for="u in result.users" :key="u.id">
             <td>
               <span class="adm-cell-email">{{ u.email || '无邮箱' }}</span>
-              <span class="adm-cell-id">{{ shortId(u.id) }}</span>
             </td>
             <td class="col-resumes">
               {{ u.resumeCount }} 份

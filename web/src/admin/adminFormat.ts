@@ -104,3 +104,16 @@ export function actionLabel(action: string): string {
 export function shortId(id: string): string {
   return id ? id.slice(0, 8) : '—'
 }
+
+/** 审计列表里给人看的对象名：用户操作优先用邮箱，其余退回短 ID */
+export function auditTargetLabel(entry: {
+  targetType: string
+  targetId: string
+  detail: Record<string, unknown>
+}): string {
+  const email =
+    entry.targetType === 'user' && typeof entry.detail.email === 'string'
+      ? entry.detail.email.trim()
+      : ''
+  return email || shortId(entry.targetId)
+}

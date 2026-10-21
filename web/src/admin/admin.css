@@ -444,15 +444,6 @@ body { background: var(--bg); }
   font-size: 12px;
   font-weight: 500;
 }
-.adm-kpi-hint {
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--fill);
-  color: var(--muted);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-}
 .adm-kpi-value {
   margin: 6px 0 8px;
   font-size: clamp(30px, 3vw, 38px);
@@ -598,7 +589,18 @@ body { background: var(--bg); }
 .adm-audit-action { font-weight: 600; }
 .adm-audit-who { color: var(--muted); font-size: 11px; }
 .adm-audit time { grid-row: 1 / span 2; grid-column: 2; align-self: center; color: var(--muted); font-size: 10px; white-space: nowrap; }
-.adm-audit-target { grid-column: 1; color: var(--muted); font-size: 10px; }
+.adm-audit-target {
+  grid-column: 1;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adm-sys { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.adm-sys summary { width: fit-content; color: var(--muted); font-size: 11px; cursor: pointer; }
+.adm-sys .adm-facts { margin-top: 8px; }
+.adm-sys .adm-note { margin-top: 6px; }
 
 .adm-skeleton { display: grid; gap: 14px; }
 .adm-sk {
@@ -668,13 +670,6 @@ body { background: var(--bg); }
 .adm-table tbody tr:last-child td { border-bottom: none; }
 .adm-table tbody tr:hover { background: #fafafb; }
 .adm-cell-email { display: block; font-weight: 500; word-break: break-all; }
-.adm-cell-id {
-  display: block;
-  margin-top: 1px;
-  color: var(--muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 10px;
-}
 .adm-cell-sub { display: block; margin-top: 1px; color: var(--muted); font-size: 10px; }
 .adm-badge {
   display: inline-flex;
@@ -746,15 +741,9 @@ body { background: var(--bg); }
 /* ---------- 用户详情 ---------- */
 .adm-detail-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
 .adm-detail-head .adm-avatar { width: 42px; height: 42px; font-size: 17px; }
-.adm-detail-identity { min-width: 0; }
+.adm-detail-identity { min-width: 0; flex: 1; }
 .adm-detail-email { margin: 0; font-size: 16px; font-weight: 600; word-break: break-all; }
-.adm-detail-id {
-  margin: 1px 0 0;
-  color: var(--muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 10px;
-  word-break: break-all;
-}
+.adm-detail-head-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: none; }
 .adm-detail-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 16px; }
 .adm-detail-section { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
 .adm-detail-section.first { margin-top: 0; padding-top: 0; border-top: none; }
