@@ -1,4 +1,5 @@
 import { reactive } from 'vue'
+import type { Session, SupabaseClient } from '@supabase/supabase-js'
 import { buildAuthRedirect, parseAuthCallback, type AuthCallback, type AuthFlow } from './authCallback'
 import { cloudConfigured, getClient, hasStoredSession } from './client'
 import { defaultDisplayName, fetchProfile, saveAvatarPath, saveProfile } from './profile'
@@ -100,11 +101,37 @@ let bootstrap: Promise<BootstrapResult> | null = null
 function clearAuthUrl(): void {
   try {
     const url = new URL(location.href)
-    url.searchParams.delete('auth')
+    for (const key of ['auth', 'type', 'token_hash']) url.searchParams.delete(key)
     url.hash = ''
     history.replaceState(history.state, '', url.pathname + url.search)
   } catch {
     // 地址异常时保留原样，不影响本次流程
+  }
+}
+
+/**
+ * 邮件模板直出的 token_hash 链接不经过 Supabase 的 /verify 重定向，
+ * 由前端兑换会话：邮件客户端预取不会消费令牌，跳转中也不会丢 hash。
+ */
+async function verifyEmailToken(
+  client: SupabaseClient,
+  callback: Extract<AuthCallback, { kind: 'token' }>,
+  existing: Session | null,
+): Promise<BootstrapResult> {
+  const { data, error } = await client.auth.verifyOtp({
+    token_hash: callback.tokenHash,
+    type: callback.flow === 'recovery' ? 'recovery' : 'email_change',
+  })
+  clearAuthUrl()
+  if (error || !data.session) {
+    return {
+      session: existing ? await applyUser(existing.user) : null,
+      callback: { kind: 'error', flow: callback.flow, description: '链接已失效' },
+    }
+  }
+  return {
+    session: await applyUser(data.session.user),
+    callback: callback.flow === 'recovery' ? { kind: 'recovery' } : { kind: 'email_change' },
   }
 }
 
@@ -127,10 +154,17 @@ export function initAccount(): Promise<BootstrapResult> {
       const client = await getClient()
       // getSession 会等待 SDK 处理完 URL hash 里的邮件令牌
       const { data: { session } } = await client.auth.getSession()
+      if (callback.kind === 'token') return await verifyEmailToken(client, callback, session)
       if (callback.kind !== 'none') clearAuthUrl()
       if (!session) return { session: null, callback }
       return { session: await applyUser(session.user), callback }
     } catch {
+      if (callback.kind === 'token') {
+        return {
+          session: null,
+          callback: { kind: 'error', flow: callback.flow, description: '链接已失效' },
+        }
+      }
       return { session: null, callback }
     } finally {
       account.restoring = false

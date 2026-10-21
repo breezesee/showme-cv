@@ -6,6 +6,7 @@ export type AuthCallback =
   | { kind: 'none' }
   | { kind: 'recovery' }
   | { kind: 'email_change' }
+  | { kind: 'token'; tokenHash: string; flow: AuthFlow }
   | { kind: 'error'; flow: AuthFlow | null; description: string }
 
 function readParams(raw: string): URLSearchParams {
@@ -19,13 +20,14 @@ function asFlow(value: string | null): AuthFlow | null {
 }
 
 /**
- * 成功回调带 access_token + type；失败回调只有 error/error_code。
- * redirectTo 上的 ?auth= 用于失败时仍能判断属于哪个流程。
+ * 成功回调带 access_token + type；邮件模板也直出 token_hash（查询参数）由前端兑换会话；
+ * 失败回调只有 error/error_code。?auth= 用于失败时仍能判断属于哪个流程。
  */
 export function parseAuthCallback(search: string, hash: string): AuthCallback {
   const query = readParams(search)
   const h = readParams(hash)
-  const flow = asFlow(h.get('type')) ?? asFlow(query.get('auth'))
+  const flow =
+    asFlow(h.get('type')) ?? asFlow(query.get('type')) ?? asFlow(query.get('auth'))
 
   if (h.has('error') || h.has('error_code')) {
     return {
@@ -35,6 +37,9 @@ export function parseAuthCallback(search: string, hash: string): AuthCallback {
       description: '链接已失效',
     }
   }
+
+  const tokenHash = query.get('token_hash') ?? h.get('token_hash')
+  if (tokenHash && flow) return { kind: 'token', tokenHash, flow }
 
   if (!h.get('access_token')) {
     // 带流程标记却没有令牌：令牌已被邮件客户端预取或 hash 被丢弃，

@@ -43,6 +43,34 @@ describe('parseAuthCallback', () => {
     })
   })
 
+  it('识别邮件模板直出的 token_hash 重置链接', () => {
+    expect(
+      parseAuthCallback('?auth=recovery&type=recovery&token_hash=hash123', ''),
+    ).toEqual({ kind: 'token', tokenHash: 'hash123', flow: 'recovery' })
+  })
+
+  it('识别邮件模板直出的 token_hash 换邮箱链接', () => {
+    expect(
+      parseAuthCallback(
+        '?auth=email-change&type=email_change&token_hash=hash456',
+        '',
+      ),
+    ).toEqual({ kind: 'token', tokenHash: 'hash456', flow: 'email-change' })
+  })
+
+  it('token_hash 链接失效时优先按错误处理', () => {
+    expect(
+      parseAuthCallback(
+        '?auth=recovery&type=recovery&token_hash=hash123',
+        '#error=access_denied&error_code=otp_expired',
+      ),
+    ).toEqual({ kind: 'error', flow: 'recovery', description: '链接已失效' })
+  })
+
+  it('只有 token_hash 没有流程类型时不误判', () => {
+    expect(parseAuthCallback('?token_hash=hash123', '')).toEqual({ kind: 'none' })
+  })
+
   it('不把分享链接或普通地址误判为认证回调', () => {
     expect(parseAuthCallback('', '#r=abc&k=def')).toEqual({ kind: 'none' })
     expect(parseAuthCallback('', '')).toEqual({ kind: 'none' })
