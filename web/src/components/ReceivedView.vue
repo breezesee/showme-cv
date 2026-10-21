@@ -41,7 +41,7 @@ async function importIncoming(): Promise<void> {
 <template>
   <div class="received">
     <header class="rv-bar glass">
-      <button class="btn btn-plain" type="button" @click="emit('close')"><Icon name="close" />关闭</button>
+      <button class="btn btn-plain" type="button" @click="emit('close')"><Icon name="close" />退出分享</button>
       <div class="rv-title">
         <strong>收到的简历</strong>
         <span>{{ name }}</span>
@@ -59,7 +59,7 @@ async function importIncoming(): Promise<void> {
         <button class="rv-own" type="button" @click="emit('create-own')">不用这份，新建我自己的简历</button>
       </section>
       <div v-else class="rv-inline">
-        <span class="hint">仅查看，关闭后本机内容保持不变</span>
+        <span class="hint">仅查看，退出后本机内容保持不变</span>
         <div class="rv-inline-actions">
           <button class="btn btn-plain" type="button" @click="emit('create-own')">新建我的简历</button>
           <button class="btn" type="button" @click="importIncoming">导入并继续编辑</button>

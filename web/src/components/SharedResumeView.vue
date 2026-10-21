@@ -35,10 +35,10 @@ async function exportView(): Promise<void> {
 <template>
   <div class="shared">
     <header class="sv-bar glass">
-      <button class="btn btn-plain" type="button" @click="emit('close')"><Icon name="close" />关闭</button>
+      <button class="btn btn-plain" type="button" @click="emit('close')"><Icon name="close" />退出分享</button>
       <div class="sv-title">
         <strong>{{ name }}</strong>
-        <span>仅查看 · 不可编辑</span>
+        <span>仅查看 · 由对方分享</span>
       </div>
       <button class="btn btn-primary" type="button" :disabled="exporting" @click="exportView">
         <Icon name="download" />{{ exporting ? '导出中…' : '导出 PDF' }}

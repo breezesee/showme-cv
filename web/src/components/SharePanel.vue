@@ -387,7 +387,7 @@ async function runExport(kind: Exclude<ExportKind, 'print'>): Promise<void> {
 
       <details v-if="!hasLocalPhoto" class="more">
         <summary>更多方式：离线长链接</summary>
-        <p class="hint">整份简历直接编码在链接里，不经过服务器、永不过期；链接很长，适合复制或发送，做不了二维码。</p>
+        <p class="hint">整份简历直接编码在链接里，不经过服务器、永不过期；生成后无法撤回。链接很长，适合复制或发送，做不了二维码。</p>
         <div class="capsule">
           <span class="link" aria-label="离线长链接" :title="longUrl">{{ longUrl }}</span>
           <button class="icon-btn" type="button" aria-label="复制离线长链接" @click="copyLink(longUrl)">

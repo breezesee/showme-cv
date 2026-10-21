@@ -11,6 +11,7 @@ import SaveResumeForm from './components/SaveResumeForm.vue'
 import SectionManager from './components/SectionManager.vue'
 import SharePanel from './components/SharePanel.vue'
 import SharedResumeView from './components/SharedResumeView.vue'
+import ShareStatusView from './components/ShareStatusView.vue'
 import Sheet from './components/Sheet.vue'
 import TemplatePicker from './components/TemplatePicker.vue'
 import TemplatePreview from './components/TemplatePreview.vue'
@@ -19,9 +20,15 @@ import ToastHost from './components/ToastHost.vue'
 import UpdateBanner from './components/UpdateBanner.vue'
 import VersionFooter from './components/VersionFooter.vue'
 import Icon, { type IconName } from './components/Icon.vue'
-import { CloudRelayError, fetchShortLink } from './relay/cloud'
+import { fetchShortLink } from './relay/cloud'
 import { parseRelayHash, type RelayPayload } from './relay/link'
-import { clearShareView, consumeShareViewExit, markShareView } from './relay/shareSession'
+import {
+  classifyShareFailure,
+  clearShareView,
+  readShareView,
+  rememberShareView,
+  type ShareFailure,
+} from './relay/shareSession'
 import { useResume } from './store/useResume'
 import { TEMPLATES } from './templates/catalog'
 import { THEMES } from './templates/themes'
@@ -75,44 +82,77 @@ const savedHint = computed(() => {
   return `已保存 ${pad(d.getHours())}:${pad(d.getMinutes())}`
 })
 
-/** 通过接力链接收到、尚未处理的简历（含发送方选择的外观） */
+/** 通过分享链接收到、尚未处理的简历（含发送方选择的外观） */
 const incoming = shallowRef<RelayPayload | null>(null)
+const shareLoading = ref(false)
+const shareFailure = ref<ShareFailure | null>(null)
+const shortHint = ref<{ id: string; key: string } | null>(null)
+const shareGate = computed<'loading' | ShareFailure | null>(() =>
+  shareLoading.value ? 'loading' : shareFailure.value,
+)
+/** 短链取回序号：切换链接或退出后丢弃迟到的结果 */
+let relaySeq = 0
 
-/** 处理地址中的接力数据；返回是否存在接力链接 */
+/**
+ * 处理地址中的分享数据；返回是否存在分享链接。
+ * hash 保留在地址里：刷新或重新打开都会回到同一份分享，只有显式退出才清除。
+ */
 function consumeRelayHash(): boolean {
   const result = parseRelayHash(location.hash)
   if (result.kind === 'none') return false
-  // 先清掉地址中的数据：刷新不会重复弹出，数据和密钥也不会留在浏览历史里
-  history.replaceState(history.state, '', location.pathname + location.search)
-  clearShareView()
-  if (result.kind === 'broken') showToast('链接已损坏，未导入任何内容', 'error', 4000)
-  else if (result.kind === 'ok') {
+  relaySeq++
+  incoming.value = null
+  shareLoading.value = false
+  shareFailure.value = null
+  shortHint.value = null
+  rememberShareView(location.hash)
+  if (result.kind === 'broken') {
+    shareFailure.value = 'broken'
+  } else if (result.kind === 'ok') {
     incoming.value = { resume: result.resume, look: result.look, permission: result.permission }
-    markShareView()
-  } else void receiveShortLink(result.id, result.key)
+  } else {
+    shortHint.value = { id: result.id, key: result.key }
+    void receiveShortLink(result.id, result.key)
+  }
   return true
 }
 
 async function receiveShortLink(id: string, key: string): Promise<void> {
-  const dismiss = showToast('正在取回分享的简历…', 'info', 15000)
+  const seq = ++relaySeq
+  shareLoading.value = true
+  shareFailure.value = null
   try {
-    incoming.value = await fetchShortLink(id, key, location.href)
-    markShareView()
-    dismiss()
+    const payload = await fetchShortLink(id, key, location.href)
+    if (seq !== relaySeq) return
+    incoming.value = payload
   } catch (e) {
-    dismiss()
-    const message = e instanceof CloudRelayError ? e.message : '无法取回分享内容'
-    showToast(`${message}，未导入任何内容`, 'error', 5000)
+    if (seq !== relaySeq) return
+    shareFailure.value = classifyShareFailure(e)
+  } finally {
+    if (seq === relaySeq) shareLoading.value = false
   }
 }
 
-function onHashChange(): void {
-  consumeRelayHash()
+function retryShare(): void {
+  const hint = shortHint.value
+  if (hint) void receiveShortLink(hint.id, hint.key)
 }
 
-function closeIncoming(): void {
+function onHashChange(): void {
+  if (consumeRelayHash()) return
+  // 地址中的分享信息被手动清除或替换：结束分享会话
+  if (incoming.value || shareLoading.value || shareFailure.value) exitShareView()
+}
+
+/** 退出分享查看：清除地址中的链接与会话，回到自己的简历 */
+function exitShareView(): void {
+  relaySeq++
   incoming.value = null
+  shareLoading.value = false
+  shareFailure.value = null
+  shortHint.value = null
   clearShareView()
+  history.replaceState(history.state, '', location.pathname + location.search)
   // 接收页会盖住主界面：关掉此前打开的弹层，避免关闭分享后旧表单重新弹出
   shareOpen.value = false
   saveOpen.value = false
@@ -123,7 +163,7 @@ function closeIncoming(): void {
 /** 从分享页新建自己的空白简历：不复制对方内容，也不改动自己已有的简历库 */
 async function createOwnFromShared(): Promise<void> {
   if (!(await createNewDocument())) return
-  closeIncoming()
+  exitShareView()
   selectTab('edit')
   showToast('已新建空白简历，编辑后记得保存', 'info', 3500)
 }
@@ -163,18 +203,24 @@ function onRecoveryClose(): void {
   else selectTab('account')
 }
 
+/** PWA 冷启动或内嵌浏览器丢失 fragment：用会话快照把分享 hash 补回地址 */
+function restoreShareHash(): void {
+  if (location.hash) return
+  const snapshot = readShareView()
+  if (snapshot === null) return
+  history.replaceState(history.state, '', location.pathname + location.search + snapshot.hash)
+}
+
+restoreShareHash()
+const initialRelay = consumeRelayHash()
+
 onMounted(() => {
-  const relayed = consumeRelayHash()
   window.addEventListener('hashchange', onHashChange)
-  if (relayed) return
+  if (initialRelay) return
   if (initialStatus === 'corrupt') showToast('本地简历数据无法读取，已另存原文并载入示例简历', 'error', 5000)
   if (restoredFromBuild.value !== null) {
     const updated = BUILD_TIME > restoredFromBuild.value
     showToast(updated ? '已更新到新版本，编辑内容已恢复' : '编辑内容已恢复', 'success', 4500)
-  }
-  // 分享页刷新后地址里已没有分享数据：明确告知当前看到的是自己的简历
-  if (consumeShareViewExit()) {
-    showToast('刷新后已退出分享查看；当前显示的是你自己的简历', 'info', 6500)
   }
   void maybeOfferOnboarding()
 })
@@ -182,16 +228,23 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
 </script>
 
 <template>
+  <ShareStatusView
+    v-if="shareGate"
+    :state="shareGate"
+    :retryable="shareFailure === 'network' || shareFailure === 'server'"
+    @close="exitShareView"
+    @retry="retryShare"
+  />
   <SharedResumeView
-    v-if="incoming && incoming.permission === 'view'"
+    v-else-if="incoming && incoming.permission === 'view'"
     :incoming="incoming"
-    @close="closeIncoming"
+    @close="exitShareView"
     @create-own="createOwnFromShared"
   />
   <ReceivedView
     v-else-if="incoming"
     :incoming="incoming"
-    @close="closeIncoming"
+    @close="exitShareView"
     @create-own="createOwnFromShared"
   />
 
