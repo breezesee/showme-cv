@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type Connect, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
@@ -91,6 +91,33 @@ function templateModule(): Plugin {
 }
 
 /**
+ * 管理台不注册主站 Service Worker、也不挂 PWA manifest。
+ * VitePWA 的注入发生在 HTML 产物写到磁盘阶段，transformIndexHtml 拦不住，
+ * 因此在写盘结束后直接清理 admin.html。
+ */
+function adminNoPwa(): Plugin {
+  let root = process.cwd()
+  let outDir = 'dist'
+  return {
+    name: 'showme-admin-no-pwa',
+    apply: 'build',
+    configResolved(config) {
+      root = config.root
+      outDir = config.build.outDir
+    },
+    closeBundle() {
+      const file = resolve(root, outDir, 'admin.html')
+      if (!existsSync(file)) return
+      const html = readFileSync(file, 'utf8')
+      const cleaned = html
+        .replace(/\s*<script[^>]*registerSW\.js[^>]*>\s*<\/script>/g, '')
+        .replace(/\s*<link[^>]*rel="manifest"[^>]*>/g, '')
+      if (cleaned !== html) writeFileSync(file, cleaned)
+    },
+  }
+}
+
+/**
  * 开发 / 预览服务器上模拟短码中转接口（内存 KV，重启即清空），与线上 Netlify Functions 走同一套处理逻辑。
  * 这样不装 netlify-cli 也能在本机、局域网里完整走通「生成二维码 → 扫码导入」。
  */
@@ -163,18 +190,21 @@ export default defineConfig({
         // manifest.webmanifest 由插件自动加入，这里不再匹配；
         // templates/*.html 已打包进 JS（虚拟模块），用 globIgnores 排除出预缓存以免无人引用的冗余副本
         globPatterns: ['**/*.{js,css,html,svg,png}'],
-        globIgnores: ['templates/*.html'],
+        // 管理台是独立入口，不进入主站 PWA 预缓存
+        globIgnores: ['templates/*.html', 'admin.html', 'assets/admin-*'],
         navigateFallback: 'index.html',
-        // 中转接口不能被 Service Worker 拦成首页
-        navigateFallbackDenylist: [/^\/api\//],
+        // 中转接口与管理台都不能被 Service Worker 拦成首页
+        navigateFallbackDenylist: [/^\/api\//, /^\/admin(?:\.html)?(?:\/|$)/],
       },
     }),
+    adminNoPwa(),
   ],
   build: {
     rollupOptions: {
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
         print: fileURLToPath(new URL('./print.html', import.meta.url)),
+        admin: fileURLToPath(new URL('./admin.html', import.meta.url)),
       },
     },
   },

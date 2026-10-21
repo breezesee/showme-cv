@@ -7,3 +7,27 @@
 
 [functions]
   directory = "netlify/functions"
+
+# 管理台是独立入口：/admin 保留无扩展名的地址，带斜杠时先归一，
+# 否则相对路径产物（base=./）会解析到 /admin/assets/ 下。
+[[redirects]]
+  from = "/admin"
+  to = "/admin.html"
+  status = 200
+
+[[redirects]]
+  from = "/admin/"
+  to = "/admin"
+  status = 301
+
+[[headers]]
+  for = "/admin"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/admin.html"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+    Cache-Control = "no-cache"
